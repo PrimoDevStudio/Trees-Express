@@ -3,8 +3,8 @@ const bodyParser = require('body-parser');
 const axios = require('axios');
 const cors = require('cors');
 const multer = require('multer');
+const crypto = require('crypto');
 const he = require('he'); // HTML Entity Decoder
-const crypto = require('crypto'); // For generating random password
 
 const app = express();
 
@@ -45,18 +45,20 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 
     const payload = decodedBody;
 
-    // Generate a random password
-    const randomPassword = crypto.randomBytes(16).toString('hex');
+    // Extract payload values
+    const userEmail = payload.email_address;
+    const biomeName = payload.custom_str3 || '';
+    const amount = parseFloat(payload.amount_gross) || 0;
+    const token = payload.token || '';
+    const friendName = payload.custom_str1 || '';
+    const friendEmail = payload.custom_str2 || ''; // Correctly extracting friendEmail
+    const billingDateStr = payload.billing_date || '';
+    
+    // Convert billing_date to Strapi date format (DD/MM/YYYY)
+    const billingDate = billingDateStr ? new Date(billingDateStr).toLocaleDateString('en-GB') : '';
 
-    // Safely extract and handle payload values
-    const userEmail = payload.email_address || ''; // Default to empty string if not present
-    const biomeName = payload.custom_str3 || ''; // Default to empty string if not present
-    const amount = parseFloat(payload.amount_gross) || 0; // Default to 0 if not a valid number
-    const token = payload.custom_str4 || ''; // Default to empty string if not present
-    const friendName = payload.custom_str1 || ''; // Default to empty string if not present
-
-    // Convert custom_int1 to integer
-    const totalPoints = parseInt(payload.custom_int1, 10) || 0;
+    // Convert custom_int1 to float
+    const totalPoints = parseFloat(payload.custom_int1) || 0;
 
     if (userEmail) {
       // Find the user by email
@@ -91,7 +93,9 @@ app.post('/process-itn', upload.none(), async (req, res) => {
               amountDonated: (userProfileResponse.data.data[0].amountDonated || 0) + amount,
               totalPoints: (userProfileResponse.data.data[0].totalPoints || 0) + totalPoints,
               token: token,
-              friendName: friendName
+              friendName: friendName,
+              friendEmail: friendEmail, // Include friendEmail here
+              billingDate: billingDate
             }
           }, {
             headers: {
@@ -107,7 +111,9 @@ app.post('/process-itn', upload.none(), async (req, res) => {
               totalPoints: totalPoints,
               user: userId,
               token: token,
-              friendName: friendName
+              friendName: friendName,
+              friendEmail: friendEmail, // Include friendEmail here
+              billingDate: billingDate
             }
           }, {
             headers: {
@@ -120,12 +126,14 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         }
       } else {
         // Create a new user if not exists
+        const randomPassword = crypto.randomBytes(8).toString('hex'); // Generate a random password
+
         const userCreateResponse = await axios.post(`${STRAPI_URL}/api/users`, {
           data: {
             email: userEmail,
-            username: payload.name_first || userEmail, // Map name_first to username
-            password: randomPassword, // Use the random password
-            role: '' // Set role to empty string
+            username: payload.name_first || userEmail,
+            password: randomPassword,
+            role: '' // Set role to empty string to default to authenticated
           }
         }, {
           headers: {
@@ -143,7 +151,9 @@ app.post('/process-itn', upload.none(), async (req, res) => {
             totalPoints: totalPoints,
             user: userId,
             token: token,
-            friendName: friendName
+            friendName: friendName,
+            friendEmail: friendEmail, // Include friendEmail here
+            billingDate: billingDate
           }
         }, {
           headers: {
@@ -169,10 +179,25 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     let biomeId;
     if (biomeResponse.data.data && biomeResponse.data.data.length > 0) {
       biomeId = biomeResponse.data.data[0].id;
+      
+      // Update existing biome with new donation details
+      await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
+        data: {
+          totalDonated: (biomeResponse.data.data[0].totalDonated || 0) + amount
+        }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
     } else {
+      // Create a new biome if not exists
       const biomeCreateResponse = await axios.post(`${STRAPI_URL}/api/biomes`, {
         data: {
-          name: biomeName
+          name: biomeName,
+          description: '', // Default value if not provided
+          totalDonated: amount
         }
       }, {
         headers: {
@@ -188,7 +213,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     await axios.post(`${STRAPI_URL}/api/donations`, {
       data: {
         amount: amount,
-        donationDate: payload.billing_date || new Date().toISOString(), // Default to current date if missing
+        donationDate: billingDate || new Date().toLocaleDateString('en-GB'), // Default to current date if missing
         userProfile: userProfileId || null, // Handle missing userProfileId
         biome: biomeId
       }
