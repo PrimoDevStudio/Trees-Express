@@ -22,15 +22,25 @@ app.use(cors({
   origin: STRAPI_URL
 }));
 
+// Log incoming requests
+app.use((req, res, next) => {
+  console.log('Incoming request headers:', req.headers);
+  console.log('Incoming request body (raw):', req.rawBody);
+  next();
+});
+
 app.post('/process-itn', async (req, res) => {
   try {
+    // Log raw request body for debugging
+    console.log('Received payload (raw):', req.body);
+
     // Decode the HTML entities in the payload
     const decodedBody = {};
     for (const [key, value] of Object.entries(req.body)) {
       decodedBody[key] = he.decode(value);
     }
 
-    console.log('Received payload:', decodedBody); // Log the decoded payload
+    console.log('Received payload (decoded):', decodedBody); // Log the decoded payload
 
     const payload = decodedBody;
 
