@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const cors = require('cors');
+const he = require('he'); // HTML Entity Decoder
 
 const app = express();
 
@@ -13,8 +14,8 @@ const STRAPI_URL = process.env.STRAPI_URL;
 const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 
 // Middleware
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
+app.use(bodyParser.json()); // For parsing application/json
 
 // CORS configuration
 app.use(cors({
@@ -23,8 +24,15 @@ app.use(cors({
 
 app.post('/process-itn', async (req, res) => {
   try {
-    const payload = req.body;
-    console.log('Received payload:', payload);
+    // Decode the HTML entities in the payload
+    const decodedBody = {};
+    for (const [key, value] of Object.entries(req.body)) {
+      decodedBody[key] = he.decode(value);
+    }
+
+    console.log('Received payload:', decodedBody); // Log the decoded payload
+
+    const payload = decodedBody;
 
     // Safely extract and handle payload values
     const userEmail = payload.custom_str2 || ''; // Default to empty string if not present
