@@ -4,6 +4,7 @@ const axios = require('axios');
 const cors = require('cors');
 const multer = require('multer');
 const he = require('he'); // HTML Entity Decoder
+const crypto = require('crypto'); // For generating random password
 
 const app = express();
 
@@ -44,15 +45,18 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 
     const payload = decodedBody;
 
+    // Generate a random password
+    const randomPassword = crypto.randomBytes(16).toString('hex');
+
     // Safely extract and handle payload values
-    const userEmail = payload.custom_str2 || ''; // Default to empty string if not present
+    const userEmail = payload.email_address || ''; // Default to empty string if not present
     const biomeName = payload.custom_str3 || ''; // Default to empty string if not present
     const amount = parseFloat(payload.amount_gross) || 0; // Default to 0 if not a valid number
-    const token = payload.token || ''; // Default to empty string if not present
+    const token = payload.custom_str4 || ''; // Default to empty string if not present
     const friendName = payload.custom_str1 || ''; // Default to empty string if not present
 
-    // Convert custom_int1 to float
-    const totalPoints = parseFloat(payload.custom_int1) || 0;
+    // Convert custom_int1 to integer
+    const totalPoints = parseInt(payload.custom_int1, 10) || 0;
 
     if (userEmail) {
       // Find the user by email
@@ -119,7 +123,9 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         const userCreateResponse = await axios.post(`${STRAPI_URL}/api/users`, {
           data: {
             email: userEmail,
-            username: payload.name_first || userEmail
+            username: payload.name_first || userEmail, // Map name_first to username
+            password: randomPassword, // Use the random password
+            role: '' // Set role to empty string
           }
         }, {
           headers: {
@@ -202,6 +208,5 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     res.status(500).send('Internal Server Error');
   }
 });
-
 
 app.listen(PORT, () => console.log(`ITN handler listening on port ${PORT}`));
