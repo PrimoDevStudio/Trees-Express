@@ -51,7 +51,6 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const token = payload.token || ''; // Default to empty string if not present
     const friendName = payload.custom_str1 || ''; // Default to empty string if not present
 
-    // Check if userEmail is valid and proceed
     if (userEmail) {
       // Find the user by email
       const userResponse = await axios.get(`${STRAPI_URL}/api/users?filters[email][$eq]=${userEmail}`, {
@@ -193,7 +192,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 
     res.status(200).send('Donation processed successfully');
   } catch (error) {
-    console.error('Error processing ITN:', error);
+    console.error('Error processing ITN:', error.response ? error.response.data : error.message);
     res.status(500).send('Internal Server Error');
   }
 });
