@@ -2,6 +2,7 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const cors = require('cors');
+const multer = require('multer');
 const he = require('he'); // HTML Entity Decoder
 
 const app = express();
@@ -13,11 +14,11 @@ const PORT = process.env.PORT || 3001;
 const STRAPI_URL = process.env.STRAPI_URL;
 const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 
-// Middleware
-app.use(bodyParser.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
-app.use(bodyParser.json()); // For parsing application/json
+// Configure multer
+const upload = multer({ storage: multer.memoryStorage() });
 
-// CORS configuration
+// Middleware
+app.use(bodyParser.json()); // For parsing application/json
 app.use(cors({
   origin: STRAPI_URL
 }));
@@ -25,11 +26,10 @@ app.use(cors({
 // Log incoming requests
 app.use((req, res, next) => {
   console.log('Incoming request headers:', req.headers);
-  console.log('Incoming request body (raw):', req.rawBody);
   next();
 });
 
-app.post('/process-itn', async (req, res) => {
+app.post('/process-itn', upload.none(), async (req, res) => {
   try {
     // Log raw request body for debugging
     console.log('Received payload (raw):', req.body);
