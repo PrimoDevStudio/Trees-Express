@@ -51,6 +51,9 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const token = payload.token || ''; // Default to empty string if not present
     const friendName = payload.custom_str1 || ''; // Default to empty string if not present
 
+    // Convert custom_int1 to float
+    const totalPoints = parseFloat(payload.custom_int1) || 0;
+
     if (userEmail) {
       // Find the user by email
       const userResponse = await axios.get(`${STRAPI_URL}/api/users?filters[email][$eq]=${userEmail}`, {
@@ -82,7 +85,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
           await axios.put(`${STRAPI_URL}/api/user-profiles/${userProfileId}`, {
             data: {
               amountDonated: (userProfileResponse.data.data[0].amountDonated || 0) + amount,
-              totalPoints: (userProfileResponse.data.data[0].totalPoints || 0) + (payload.custom_int1 || 0),
+              totalPoints: (userProfileResponse.data.data[0].totalPoints || 0) + totalPoints,
               token: token,
               friendName: friendName
             }
@@ -97,7 +100,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
           const userProfileCreateResponse = await axios.post(`${STRAPI_URL}/api/user-profiles`, {
             data: {
               amountDonated: amount,
-              totalPoints: payload.custom_int1 || 0,
+              totalPoints: totalPoints,
               user: userId,
               token: token,
               friendName: friendName
@@ -131,7 +134,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         await axios.post(`${STRAPI_URL}/api/user-profiles`, {
           data: {
             amountDonated: amount,
-            totalPoints: payload.custom_int1 || 0,
+            totalPoints: totalPoints,
             user: userId,
             token: token,
             friendName: friendName
@@ -193,8 +196,12 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     res.status(200).send('Donation processed successfully');
   } catch (error) {
     console.error('Error processing ITN:', error.response ? error.response.data : error.message);
+    if (error.response && error.response.data && error.response.data.error && error.response.data.error.details) {
+      console.error('Validation errors:', error.response.data.error.details.errors);
+    }
     res.status(500).send('Internal Server Error');
   }
 });
+
 
 app.listen(PORT, () => console.log(`ITN handler listening on port ${PORT}`));
