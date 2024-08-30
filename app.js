@@ -43,7 +43,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const friendEmail = payload.custom_str2 || ''; // Correctly extracting friendEmail
     const billingDateStr = payload.billing_date || '';
     // Convert billing_date to Strapi date format (DD/MM/YYYY)
-    const billingDate = billingDateStr ? new Date(billingDateStr).toLocaleDateString('en-GB') : '';
+    const billingDate = billingDateStr ? new Date(billingDateStr).toLocaleDateString('en-ZA') : '';
     // Convert custom_int1 to float
     const totalPoints = parseFloat(payload.custom_int1) || 0;
     console.log('Extracted data:', { userEmail, biomeName, amount, token, friendName, friendEmail, billingDate, totalPoints });
