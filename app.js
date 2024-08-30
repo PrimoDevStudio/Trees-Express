@@ -63,8 +63,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     let userId;
     let userProfileId;
 
-    if (userResponse.data && userResponse.data.data.length > 0) {
-      userId = userResponse.data.data[0].id;
+    if (userResponse.data && userResponse.data.length > 0) {
+      userId = userResponse.data[0].id;
       console.log('Existing user found, ID:', userId);
 
       console.log('Searching for UserProfile');
@@ -76,13 +76,13 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       });
       console.log('UserProfile response:', userProfileResponse.data);
 
-      if (userProfileResponse.data && userProfileResponse.data.data.length > 0) {
-        userProfileId = userProfileResponse.data.data[0].id;
+      if (userProfileResponse.data && userProfileResponse.data.length > 0) {
+        userProfileId = userProfileResponse.data[0].id;
         console.log('Updating existing UserProfile, ID:', userProfileId);
         const updateResponse = await axios.put(`${STRAPI_URL}/api/user-profiles/${userProfileId}`, {
           data: {
-            amountDonated: (userProfileResponse.data.data[0].amountDonated || 0) + amount,
-            totalPoints: (userProfileResponse.data.data[0].totalPoints || 0) + totalPoints,
+            amountDonated: (userProfileResponse.data[0].amountDonated || 0) + amount,
+            totalPoints: (userProfileResponse.data[0].totalPoints || 0) + totalPoints,
             token: token,
             friendName: friendName,
             friendEmail: friendEmail,
@@ -95,6 +95,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
           }
         });
         console.log('UserProfile update response:', updateResponse.data);
+        userProfileId = updateResponse.data.id;
       } else {
         console.log('Creating new UserProfile for existing user');
         const userProfileCreateResponse = await axios.post(`${STRAPI_URL}/api/user-profiles`, {
@@ -183,8 +184,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       throw new Error(`Biome "${biomeName}" not found`);
     }
 
-    console.log('Fetching existing cards');
-    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards-collecteds`, {
+    console.log('Fetching cards based on points');
+    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards`, {
       headers: {
         'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
         'Content-Type': 'application/json'
@@ -198,10 +199,11 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     console.log('Cards to assign:', cardsToAssign);
 
     if (cardsToAssign.length > 0) {
-      console.log('Updating user with collected cards');
-      const updateUserResponse = await axios.put(`${STRAPI_URL}/api/users/${userId}`, {
+      console.log('Updating user profile with collected cards');
+      const cardIds = cardsToAssign.map(card => ({ id: card.id }));
+      const updateUserProfileResponse = await axios.put(`${STRAPI_URL}/api/user-profiles/${userProfileId}`, {
         data: {
-          cards_collecteds: cardsToAssign.map(card => ({ id: card.id }))
+          cards_collecteds: cardIds
         }
       }, {
         headers: {
@@ -209,7 +211,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
           'Content-Type': 'application/json'
         }
       });
-      console.log('User update response with cards:', updateUserResponse.data);
+      console.log('UserProfile update response with cards:', updateUserProfileResponse.data);
     } else {
       console.log('No cards to assign based on total points');
     }
@@ -231,13 +233,15 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     console.log('Donation creation response:', donationResponse.data);
 
     console.log('ITN processing completed successfully');
-    res.status(200).send('Success');
+    res.status(200).send('Donation processed successfully');
   } catch (error) {
-    console.error('Error processing ITN request:', error.response ? error.response.data : error.message);
-    res.status(error.response?.status || 500).send('Internal Server Error');
+    console.error('Error processing ITN:', error.response ? error.response.data : error.message);
+    if (error.response && error.response.data && error.response.data.error && error.response.data.error.details) {
+      console.error('Validation errors:', error.response.data.error.details.errors);
+    }
+    console.error('Full error object:', error);
+    res.status(500).send('Internal Server Error');
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`ITN handler listening on port ${PORT}`));
