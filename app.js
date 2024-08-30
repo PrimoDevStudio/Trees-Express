@@ -184,8 +184,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       throw new Error(`Biome "${biomeName}" not found`);
     }
 
-    console.log('Fetching cards based on points');
-    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards`, {
+    console.log('Fetching available cards');
+    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards-collecteds`, {
       headers: {
         'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
         'Content-Type': 'application/json'
