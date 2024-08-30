@@ -155,7 +155,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     }
 
     console.log('Searching for Biome');
-    const biomeResponse = await axios.get(`${STRAPI_URL}/api/biomes?filters[name][$eq]=${biomeName}`, {
+    const biomeResponse = await axios.get(`${STRAPI_URL}/api/biomes?filters[name][$eq]=${encodeURIComponent(biomeName)}`, {
       headers: {
         'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
         'Content-Type': 'application/json'
@@ -164,12 +164,12 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     console.log('Biome response:', biomeResponse.data);
 
     let biomeId;
-    if (biomeResponse.data && biomeResponse.data.length > 0) {
-      biomeId = biomeResponse.data[0].id;
+    if (biomeResponse.data && biomeResponse.data.data && biomeResponse.data.data.length > 0) {
+      biomeId = biomeResponse.data.data[0].id;
       console.log('Updating existing Biome, ID:', biomeId);
       const biomeUpdateResponse = await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
         data: {
-          totalDonated: (biomeResponse.data[0].totalDonated || 0) + amount
+          totalDonated: (biomeResponse.data.data[0].attributes.totalDonated || 0) + amount
         }
       }, {
         headers: {
@@ -179,21 +179,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       });
       console.log('Biome update response:', biomeUpdateResponse.data);
     } else {
-      console.log('Creating new Biome');
-      const biomeCreateResponse = await axios.post(`${STRAPI_URL}/api/biomes`, {
-        data: {
-          name: biomeName,
-          description: '',
-          totalDonated: amount
-        }
-      }, {
-        headers: {
-          'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      console.log('New Biome creation response:', biomeCreateResponse.data);
-      biomeId = biomeCreateResponse.data.id;
+      console.error(`Biome "${biomeName}" not found. Donation cannot be processed.`);
+      throw new Error(`Biome "${biomeName}" not found`);
     }
 
     console.log('Creating Donation');
