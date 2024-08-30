@@ -71,6 +71,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         email: userEmail,
         username: payload.name_first || userEmail,
         password: randomPassword,
+        role: '' // Set the role field as an empty string
       }, {
         headers: {
           'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
