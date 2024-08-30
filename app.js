@@ -114,7 +114,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
           }
         });
         console.log('New UserProfile creation response:', userProfileCreateResponse.data);
-        userProfileId = userProfileCreateResponse.data.id;
+        userProfileId = userProfileCreateResponse.data.data.id; // Ensure correct path to ID
       }
     } else {
       console.log('Creating new user');
@@ -151,7 +151,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         }
       });
       console.log('New UserProfile creation response:', userProfileCreateResponse.data);
-      userProfileId = userProfileCreateResponse.data.id;
+      userProfileId = userProfileCreateResponse.data.data.id; // Ensure correct path to ID
     }
 
     if (!userProfileId) {
