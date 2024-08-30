@@ -44,8 +44,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const billingDateStr = payload.billing_date || '';
     
     // Convert custom_int1 to float
-    const totalPoints = parseFloat(payload.custom_int1) || 0;
-    console.log('Extracted data:', { userEmail, biomeName, amount, token, friendName, friendEmail, billingDate, totalPoints });
+    const totalPoints = parseInt(payload.custom_int1, 10) || 0;
+    console.log('Extracted data:', { userEmail, biomeName, amount, token, friendName, friendEmail, billingDateStr, totalPoints });
     if (userEmail) {
       // Find the user by email
       const userResponse = await axios.get(`${STRAPI_URL}/api/users?filters[email][$eq]=${userEmail}`, {
