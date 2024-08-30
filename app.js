@@ -42,8 +42,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const friendName = payload.custom_str1 || '';
     const friendEmail = payload.custom_str2 || ''; // Correctly extracting friendEmail
     const billingDateStr = payload.billing_date || '';
-    // Convert billing_date to Strapi date format (DD/MM/YYYY)
-    const billingDate = billingDateStr ? new Date(billingDateStr).toLocaleDateString('en-ZA') : '';
+    
     // Convert custom_int1 to float
     const totalPoints = parseFloat(payload.custom_int1) || 0;
     console.log('Extracted data:', { userEmail, biomeName, amount, token, friendName, friendEmail, billingDate, totalPoints });
@@ -78,7 +77,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
               token: token,
               friendName: friendName,
               friendEmail: friendEmail, // Include friendEmail here
-              billingDate: billingDate
+              billingDate: billingDateStr
             }
           }, {
             headers: {
@@ -96,7 +95,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
               token: token,
               friendName: friendName,
               friendEmail: friendEmail, // Include friendEmail here
-              billingDate: billingDate
+              billingDate: billingDateStr
             }
           }, {
             headers: {
@@ -130,7 +129,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
             token: token,
             friendName: friendName,
             friendEmail: friendEmail, // Include friendEmail here
-            billingDate: billingDate
+            billingDate: billingDateStr
           }
         }, {
           headers: {
@@ -182,7 +181,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       await axios.post(`${STRAPI_URL}/api/donations`, {
         data: {
           amount: amount,
-          donationDate: billingDate || new Date().toLocaleDateString('en-GB'), // Default to current date if missing
+          donationDate: billingDateStr || new Date().toLocaleDateString('en-GB'), // Default to current date if missing
           userProfile: userProfileId || null, // Handle missing userProfileId
           biome: biomeId
         }
