@@ -18,22 +18,16 @@ app.use(cors({
   origin: STRAPI_URL
 }));
 
-// Log incoming requests
-app.use((req, res, next) => {
-  console.log('Incoming request headers:', req.headers);
-  next();
-});
-
 app.post('/process-itn', upload.none(), async (req, res) => {
   console.log('Processing ITN request');
   try {
-    console.log('Received payload (raw):', req.body);
+    // Decode HTML entities in the payload
     const decodedBody = {};
     for (const [key, value] of Object.entries(req.body)) {
       decodedBody[key] = he.decode(value);
     }
     console.log('Received payload (decoded):', decodedBody);
-    
+
     const payload = decodedBody;
     const userEmail = payload.email_address;
     const biomeName = payload.custom_str3 || '';
@@ -44,209 +38,193 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const billingDateStr = payload.billing_date || '';
     const totalPoints = parseInt(payload.custom_int1, 10) || 0;
 
-    console.log('Extracted data:', { userEmail, biomeName, amount, token, friendName, friendEmail, billingDateStr, totalPoints });
-
     if (!userEmail) {
       console.error('No valid user email provided');
       return res.status(400).send('Bad Request: Missing user email');
     }
 
-    console.log('Searching for user');
     let userId;
     let userProfileId;
 
+    // Check for existing user
+    let userResponse;
     try {
-      const userResponse = await axios.get(`${STRAPI_URL}/api/users`, {
-        params: {
-          filters: {
-            email: {
-              $eq: userEmail
-            }
-          }
-        },
-        headers: {
-          'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
+      userResponse = await axios.get(`${STRAPI_URL}/api/users`, {
+        params: { filters: { email: { $eq: userEmail } } },
+        headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
       });
-      console.log('User response:', userResponse.data);
+    } catch (error) {
+      console.error('Error fetching user:', error.response ? error.response.data : error.message);
+      return res.status(500).send('Internal Server Error');
+    }
 
-      if (userResponse.data && userResponse.data.data && userResponse.data.data.length > 0) {
-        userId = userResponse.data.data[0].id;
-        console.log('Existing user found, ID:', userId);
+    if (userResponse.data && userResponse.data.data && userResponse.data.data.length > 0) {
+      userId = userResponse.data.data[0].id;
+      console.log('Existing user found, ID:', userId);
 
-        console.log('Searching for UserProfile');
-        const userProfileResponse = await axios.get(`${STRAPI_URL}/api/user-profiles`, {
-          params: {
-            filters: {
-              user: {
-                id: {
-                  $eq: userId
-                }
-              }
-            }
-          },
-          headers: {
-            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
+      // Check for existing UserProfile
+      let userProfileResponse;
+      try {
+        userProfileResponse = await axios.get(`${STRAPI_URL}/api/user-profiles`, {
+          params: { filters: { user: { id: { $eq: userId } } } },
+          headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
         });
-        console.log('UserProfile response:', userProfileResponse.data);
+      } catch (error) {
+        console.error('Error fetching user profile:', error.response ? error.response.data : error.message);
+        return res.status(500).send('Internal Server Error');
+      }
 
-        if (userProfileResponse.data && userProfileResponse.data.data && userProfileResponse.data.data.length > 0) {
-          userProfileId = userProfileResponse.data.data[0].id;
-          console.log('Updating existing UserProfile, ID:', userProfileId);
-          const updateResponse = await axios.put(`${STRAPI_URL}/api/user-profiles/${userProfileId}`, {
-            data: {
-              amountDonated: (userProfileResponse.data.data[0].attributes.amountDonated || 0) + amount,
-              totalPoints: (userProfileResponse.data.data[0].attributes.totalPoints || 0) + totalPoints,
-              token: token,
-              friendName: friendName,
-              friendEmail: friendEmail,
-              billingDate: billingDateStr
-            }
-          }, {
-            headers: {
-              'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          console.log('UserProfile update response:', updateResponse.data);
-        } else {
-          console.log('Creating new UserProfile for existing user');
-          const userProfileCreateResponse = await axios.post(`${STRAPI_URL}/api/user-profiles`, {
-            data: {
-              amountDonated: amount,
-              totalPoints: totalPoints,
-              user: userId,
-              token: token,
-              friendName: friendName,
-              friendEmail: friendEmail,
-              billingDate: billingDateStr
-            }
-          }, {
-            headers: {
-              'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          console.log('New UserProfile creation response:', userProfileCreateResponse.data);
-          userProfileId = userProfileCreateResponse.data.data.id; // Ensure correct path to ID
-        }
-      } else {
-        console.log('Creating new user');
-        const randomPassword = crypto.randomBytes(8).toString('hex');
-        const userCreateResponse = await axios.post(`${STRAPI_URL}/api/users`, {
-          email: userEmail,
-          username: payload.name_first || userEmail,
-          password: randomPassword,
-          role: ''  // Ensure role field is provided
-        }, {
-          headers: {
-            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        console.log('New user creation response:', userCreateResponse.data);
-        userId = userCreateResponse.data.id;
-
-        console.log('Creating UserProfile for new user');
-        const userProfileCreateResponse = await axios.post(`${STRAPI_URL}/api/user-profiles`, {
+      if (userProfileResponse.data && userProfileResponse.data.data && userProfileResponse.data.data.length > 0) {
+        userProfileId = userProfileResponse.data.data[0].id;
+        console.log('Updating existing UserProfile, ID:', userProfileId);
+        await axios.put(`${STRAPI_URL}/api/user-profiles/${userProfileId}`, {
           data: {
-            amountDonated: amount,
-            totalPoints: totalPoints,
-            user: userId,
+            amountDonated: (userProfileResponse.data.data[0].attributes.amountDonated || 0) + amount,
+            totalPoints: (userProfileResponse.data.data[0].attributes.totalPoints || 0) + totalPoints,
             token: token,
-            friendName: friendName,
-            friendEmail: friendEmail,
-            billingDate: billingDateStr
+            billingDate: token ? billingDateStr : undefined
           }
         }, {
-          headers: {
-            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
+          headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
         });
-        console.log('New UserProfile creation response:', userProfileCreateResponse.data);
-        userProfileId = userProfileCreateResponse.data.data.id; // Ensure correct path to ID
-      }
-    } catch (error) {
-      console.error('Error during user or user profile creation:', error.response ? error.response.data : error.message);
-      return res.status(500).send('Internal Server Error');
-    }
-
-    if (!userProfileId) {
-      throw new Error('UserProfile ID is not set');
-    }
-
-    console.log('Searching for Biome');
-    let biomeId;
-    try {
-      const biomeResponse = await axios.get(`${STRAPI_URL}/api/biomes`, {
-        params: {
-          filters: {
-            name: {
-              $eq: biomeName
-            }
-          }
-        },
-        headers: {
-          'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      console.log('Biome response:', biomeResponse.data);
-
-      if (biomeResponse.data && biomeResponse.data.data && biomeResponse.data.data.length > 0) {
-        biomeId = biomeResponse.data.data[0].id;
-        console.log('Updating existing Biome, ID:', biomeId);
-        const biomeUpdateResponse = await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
-          data: {
-            totalDonated: (biomeResponse.data.data[0].attributes.totalDonated || 0) + amount
-          }
-        }, {
-          headers: {
-            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        console.log('Biome update response:', biomeUpdateResponse.data);
       } else {
-        console.error(`Biome "${biomeName}" not found. Donation cannot be processed.`);
-        throw new Error(`Biome "${biomeName}" not found`);
+        console.error('UserProfile not found for existing user');
+        return res.status(404).send('UserProfile not found for existing user');
       }
-    } catch (error) {
-      console.error('Error during biome handling:', error.response ? error.response.data : error.message);
-      return res.status(500).send('Internal Server Error');
-    }
 
-    console.log('Creating Donation');
-    let donationId;
-    try {
-      const donationResponse = await axios.post(`${STRAPI_URL}/api/donations`, {
+      // Create new Donation for existing user
+      let donationId;
+      try {
+        const donationResponse = await axios.post(`${STRAPI_URL}/api/donations`, {
+          data: {
+            amount: amount,
+            donationDate: billingDateStr || new Date().toLocaleDateString('en-GB'),
+            userProfile: userProfileId,
+            biome: biomeId // This should be set below after finding/creating biome
+          }
+        }, {
+          headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+        });
+        donationId = donationResponse.data.data.id;
+      } catch (error) {
+        console.error('Error creating donation:', error.response ? error.response.data : error.message);
+        return res.status(500).send('Internal Server Error');
+      }
+
+      // Create GiftDonation if applicable
+      if (friendName && friendEmail) {
+        try {
+          await axios.post(`${STRAPI_URL}/api/gift-donations`, {
+            data: {
+              amount: amount,
+              donationDate: billingDateStr || new Date().toLocaleDateString('en-GB'),
+              userProfile: userProfileId,
+              biome: biomeId,
+              friendName: friendName,
+              friendEmail: friendEmail
+            }
+          }, {
+            headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+          });
+        } catch (error) {
+          console.error('Error creating GiftDonation:', error.response ? error.response.data : error.message);
+          return res.status(500).send('Internal Server Error');
+        }
+      }
+
+      // Handle Biome update
+      let biomeId;
+      try {
+        const biomeResponse = await axios.get(`${STRAPI_URL}/api/biomes`, {
+          params: { filters: { name: { $eq: biomeName } } },
+          headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+        });
+        if (biomeResponse.data && biomeResponse.data.data && biomeResponse.data.data.length > 0) {
+          biomeId = biomeResponse.data.data[0].id;
+          await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
+            data: {
+              totalDonated: (biomeResponse.data.data[0].attributes.totalDonated || 0) + amount
+            }
+          }, {
+            headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+          });
+        } else {
+          console.error('Biome not found:', biomeName);
+          return res.status(404).send('Biome not found');
+        }
+      } catch (error) {
+        console.error('Error handling biome:', error.response ? error.response.data : error.message);
+        return res.status(500).send('Internal Server Error');
+      }
+
+      // Handle CardsCollected
+      try {
+        const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards`, {
+          params: { filters: { pointsRequired: { $lte: totalPoints } } },
+          headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+        });
+        if (cardsResponse.data && cardsResponse.data.data && cardsResponse.data.data.length > 0) {
+          for (const card of cardsResponse.data.data) {
+            await axios.post(`${STRAPI_URL}/api/cards-collecteds`, {
+              data: {
+                card: card.id,
+                user: userId // Directly associated with User
+              }
+            }, {
+              headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+            });
+          }
+        } else {
+          console.error('No cards found for the given points');
+          return res.status(404).send('No cards found for the given points');
+        }
+      } catch (error) {
+        console.error('Error fetching or creating cards collected:', error.response ? error.response.data : error.message);
+        return res.status(500).send('Internal Server Error');
+      }
+
+    } else {
+      console.log('Creating new user');
+      const randomPassword = crypto.randomBytes(8).toString('hex');
+      const userCreateResponse = await axios.post(`${STRAPI_URL}/api/users`, {
+        email: userEmail,
+        username: payload.name_first || userEmail,
+        password: randomPassword,
+        role: '' // Ensure 'role' is included as an empty string
+      }, {
+        headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+      });
+      userId = userCreateResponse.data.id;
+
+      // Create UserProfile for new user
+      console.log('Creating UserProfile for new user');
+      const userProfileCreateResponse = await axios.post(`${STRAPI_URL}/api/user-profiles`, {
+        data: {
+          amountDonated: amount,
+          totalPoints: totalPoints,
+          user: userId,
+          token: token,
+          billingDate: token ? billingDateStr : undefined
+        }
+      }, {
+        headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+      });
+      userProfileId = userProfileCreateResponse.data.data.id;
+
+      // Create new Donation
+      const donationCreateResponse = await axios.post(`${STRAPI_URL}/api/donations`, {
         data: {
           amount: amount,
           donationDate: billingDateStr || new Date().toLocaleDateString('en-GB'),
-          userProfile: userProfileId || null,
-          biome: biomeId
+          userProfile: userProfileId,
+          biome: biomeId // This should be set below after finding/creating biome
         }
       }, {
-        headers: {
-          'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
       });
-      console.log('Donation creation response:', donationResponse.data);
-      donationId = donationResponse.data.data.id;
-    } catch (error) {
-      console.error('Error creating donation:', error.response ? error.response.data : error.message);
-      return res.status(500).send('Internal Server Error');
-    }
 
-    // Handle GiftDonation
-    if (friendName && friendEmail) {
-      console.log('Creating GiftDonation');
-      try {
+      // Create GiftDonation if applicable
+      if (friendName && friendEmail) {
         await axios.post(`${STRAPI_URL}/api/gift-donations`, {
           data: {
             amount: amount,
@@ -257,62 +235,65 @@ app.post('/process-itn', upload.none(), async (req, res) => {
             friendEmail: friendEmail
           }
         }, {
-          headers: {
-            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
+          headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
         });
-        console.log('GiftDonation creation response: Success');
+      }
+
+      // Handle Biome creation/update
+      let biomeId;
+      try {
+        const biomeResponse = await axios.get(`${STRAPI_URL}/api/biomes`, {
+          params: { filters: { name: { $eq: biomeName } } },
+          headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+        });
+        if (biomeResponse.data && biomeResponse.data.data && biomeResponse.data.data.length > 0) {
+          biomeId = biomeResponse.data.data[0].id;
+          await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
+            data: {
+              totalDonated: (biomeResponse.data.data[0].attributes.totalDonated || 0) + amount
+            }
+          }, {
+            headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+          });
+        } else {
+          console.error('Biome not found:', biomeName);
+          return res.status(404).send('Biome not found');
+        }
       } catch (error) {
-        console.error('Error creating GiftDonation:', error.response ? error.response.data : error.message);
+        console.error('Error handling biome:', error.response ? error.response.data : error.message);
+        return res.status(500).send('Internal Server Error');
+      }
+
+      // Handle CardsCollected
+      try {
+        const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards`, {
+          params: { filters: { pointsRequired: { $lte: totalPoints } } },
+          headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+        });
+        if (cardsResponse.data && cardsResponse.data.data && cardsResponse.data.data.length > 0) {
+          for (const card of cardsResponse.data.data) {
+            await axios.post(`${STRAPI_URL}/api/cards-collecteds`, {
+              data: {
+                card: card.id,
+                user: userId // Directly associated with User
+              }
+            }, {
+              headers: { 'Authorization': `Bearer ${STRAPI_API_TOKEN}`, 'Content-Type': 'application/json' }
+            });
+          }
+        } else {
+          console.error('No cards found for the given points');
+          return res.status(404).send('No cards found for the given points');
+        }
+      } catch (error) {
+        console.error('Error fetching or creating cards collected:', error.response ? error.response.data : error.message);
         return res.status(500).send('Internal Server Error');
       }
     }
 
-    console.log('Associating CardsCollected');
-    try {
-      const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards-collecteds`, {
-        params: {
-          filters: {
-            pointsRequired: {
-              $lte: totalPoints
-            }
-          }
-        },
-        headers: {
-          'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      console.log('Cards response:', cardsResponse.data);
-
-      if (cardsResponse.data && cardsResponse.data.data && cardsResponse.data.data.length > 0) {
-        for (const card of cardsResponse.data.data) {
-          // Create a new CardsCollected association
-          await axios.post(`${STRAPI_URL}/api/cards-collecteds`, {
-            data: {
-              user: userId,
-              card: card.id
-            }
-          }, {
-            headers: {
-              'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-              'Content-Type': 'application/json'
-            }
-          });
-        }
-        console.log('CardsCollected association complete');
-      } else {
-        console.warn('No cards found for the given totalPoints');
-      }
-    } catch (error) {
-      console.error('Error fetching or associating cards:', error.response ? error.response.data : error.message);
-      return res.status(500).send('Internal Server Error');
-    }
-
-    res.status(200).send('Success');
+    res.status(200).send('ITN processed successfully');
   } catch (error) {
-    console.error('General error:', error.message);
+    console.error('Error processing ITN:', error.response ? error.response.data : error.message);
     res.status(500).send('Internal Server Error');
   }
 });
