@@ -79,14 +79,14 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       });
       console.log('UserProfile response:', userProfileResponse.data);
 
-      if (userProfileResponse.data && userProfileResponse.data.length > 0) {
+      if (userProfileResponse.data && userProfileResponse.data.data.length > 0) {
         // UserProfile exists
-        userProfileId = userProfileResponse.data[0].id;
+        userProfileId = userProfileResponse.data.data[0].id;
         console.log('Updating existing UserProfile, ID:', userProfileId);
-        await axios.put(`${STRAPI_URL}/api/user-profiles/${userProfileId}`, {
+        const updateResponse = await axios.put(`${STRAPI_URL}/api/user-profiles/${userProfileId}`, {
           data: {
-            amountDonated: (userProfileResponse.data[0].attributes.amountDonated || 0) + amount,
-            totalPoints: (userProfileResponse.data[0].attributes.totalPoints || 0) + totalPoints,
+            amountDonated: (userProfileResponse.data.data[0].attributes.amountDonated || 0) + amount,
+            totalPoints: (userProfileResponse.data.data[0].attributes.totalPoints || 0) + totalPoints,
             token: token,
             friendName: friendName,
             friendEmail: friendEmail,
@@ -112,7 +112,9 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         email: userEmail,
         username: payload.name_first || userEmail,
         password: randomPassword,
-        role: '' // Ensure role field is provided
+        role: {
+          connect: [{ id: 1 }]
+        }
       }, {
         headers: {
           'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
@@ -140,7 +142,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         }
       });
       console.log('New UserProfile creation response:', userProfileCreateResponse.data);
-      userProfileId = userProfileCreateResponse.data.data.id; // Ensure correct path to ID
+      userProfileId = userProfileCreateResponse.data.data.id;
     }
 
     if (!userProfileId) {
@@ -148,22 +150,27 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     }
 
     // Handle Biome
-    console.log('Searching for Biome');
-    const biomeResponse = await axios.get(`${STRAPI_URL}/api/biomes?filters[name][$eq]=${encodeURIComponent(biomeName)}`, {
+    console.log('Searching for Biome:', biomeName);
+    const biomeResponse = await axios.get(`${STRAPI_URL}/api/biomes`, {
       headers: {
         'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
         'Content-Type': 'application/json'
       }
     });
-    console.log('Biome response:', biomeResponse.data);
+    console.log('All Biomes response:', biomeResponse.data);
 
     let biomeId;
-    if (biomeResponse.data && biomeResponse.data.length > 0) {
-      biomeId = biomeResponse.data[0].id;
-      console.log('Updating existing Biome, ID:', biomeId);
-      await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
+    const matchingBiome = biomeResponse.data.data.find(biome => 
+      biome.attributes.name.trim().toLowerCase() === biomeName.trim().toLowerCase()
+    );
+
+    if (matchingBiome) {
+      biomeId = matchingBiome.id;
+      console.log('Matching Biome found, ID:', biomeId);
+      console.log('Updating existing Biome');
+      const biomeUpdateResponse = await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
         data: {
-          totalDonated: (biomeResponse.data[0].attributes.totalDonated || 0) + amount
+          totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount
         }
       }, {
         headers: {
@@ -173,7 +180,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       });
       console.log('Biome update response:', biomeUpdateResponse.data);
     } else {
-      console.error(`Biome "${biomeName}" not found. Donation cannot be processed.`);
+      console.error(`Biome "${biomeName}" not found. Available biomes:`, biomeResponse.data.data.map(b => b.attributes.name));
       throw new Error(`Biome "${biomeName}" not found`);
     }
 
@@ -182,8 +189,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const donationResponse = await axios.post(`${STRAPI_URL}/api/donations`, {
       data: {
         amount: amount,
-        donationDate: billingDateStr || new Date().toLocaleDateString('en-GB'),
-        user: userId, // Directly link to User
+        donationDate: billingDateStr || new Date().toISOString(),
+        user: userId,
         biome: biomeId
       }
     }, {
@@ -200,8 +207,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       const giftDonationResponse = await axios.post(`${STRAPI_URL}/api/gift-donations`, {
         data: {
           amount: amount,
-          donationDate: billingDateStr || new Date().toLocaleDateString('en-GB'),
-          user: userId, // Directly link to User
+          donationDate: billingDateStr || new Date().toISOString(),
+          user: userId,
           biome: biomeId,
           friendName: friendName,
           friendEmail: friendEmail
@@ -225,12 +232,12 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     });
     console.log('Cards response:', cardsResponse.data);
 
-    if (cardsResponse.data && cardsResponse.data.length > 0) {
-      for (const card of cardsResponse.data) {
+    if (cardsResponse.data && cardsResponse.data.data.length > 0) {
+      for (const card of cardsResponse.data.data) {
         // Create a new CardsCollected association
         await axios.post(`${STRAPI_URL}/api/cards-collecteds`, {
           data: {
-            user: userId, // Directly link to User
+            user: userId,
             card: card.id
           }
         }, {
@@ -248,7 +255,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     res.status(200).json({ message: 'ITN processed successfully' });
   } catch (error) {
     console.error('Error processing ITN:', error.response ? error.response.data : error.message);
-    res.status(500).json({ error: 'Error processing ITN' });
+    res.status(500).json({ error: 'Error processing ITN', details: error.message });
   }
 });
 
