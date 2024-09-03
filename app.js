@@ -90,7 +90,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
             token: token,
             friendName: friendName,
             friendEmail: friendEmail,
-            billingDate: billingDateStr
+            billingDate: billingDateStr,
+            user: userId // Ensure relation to user
           }
         }, {
           headers: {
@@ -169,7 +170,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       console.log('Updating existing Biome');
       const biomeUpdateResponse = await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
         data: {
-          totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount
+          totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount,
+          users: [...matchingBiome.attributes.users, userId] // Associate user with biome
         }
       }, {
         headers: {
@@ -223,7 +225,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 
     // Associate CardsCollected based on totalPoints
     console.log('Associating CardsCollected');
-    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards-collecteds?filters[pointsRequired][$lte]=${totalPoints}`, {
+    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards?filters[pointsRequired][$lte]=${totalPoints}`, {
       headers: {
         'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
         'Content-Type': 'application/json'
@@ -235,10 +237,11 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       for (const card of cardsResponse.data.data) {
         console.log(`Associating existing card ID: ${card.id} with user ID: ${userId}`);
         
-        // Update existing CardsCollected with the user's ID
-        const cardAssociationResponse = await axios.put(`${STRAPI_URL}/api/cards-collecteds/${card.id}`, {
+        // Create or associate CardsCollected with the user's ID
+        await axios.post(`${STRAPI_URL}/api/cards-collecteds`, {
           data: {
-            user: userId
+            user: userId, // Set relation to the user
+            card: card.id // Set relation to the card
           }
         }, {
           headers: {
@@ -246,7 +249,6 @@ app.post('/process-itn', upload.none(), async (req, res) => {
             'Content-Type': 'application/json'
           }
         });
-        console.log('Card association response:', cardAssociationResponse.data);
       }
       console.log('CardsCollected association complete');
     } else {
