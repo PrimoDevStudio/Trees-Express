@@ -101,6 +101,16 @@ app.post('/process-itn', upload.none(), async (req, res) => {
           }
         });
         console.log('UserProfile update response:', updateResponse.data);
+
+        // Associate user_profile with user
+        await axios.put(`${STRAPI_URL}/api/users/${userId}`, {
+          user_profile: userProfileId
+        }, {
+          headers: {
+            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        });
       } else {
         console.error('UserProfile not found for existing user');
         return res.status(404).send('UserProfile not found for existing user');
@@ -144,6 +154,16 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       });
       console.log('New UserProfile creation response:', userProfileCreateResponse.data);
       userProfileId = userProfileCreateResponse.data.data.id;
+
+      // Associate user_profile with user
+      await axios.put(`${STRAPI_URL}/api/users/${userId}`, {
+        user_profile: userProfileId
+      }, {
+        headers: {
+          'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
     }
 
     if (!userProfileId) {
@@ -168,11 +188,11 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     if (matchingBiome) {
       biomeId = matchingBiome.id;
       console.log('Matching Biome found, ID:', biomeId);
-      console.log('Updating existing Biome');
+
+      // Update existing Biome
       const biomeUpdateResponse = await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
         data: {
-          totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount,
-          users: { connect: [{ id: userId }] } // Connect user to biome
+          totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount
         }
       }, {
         headers: {
@@ -181,9 +201,34 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         }
       });
       console.log('Biome update response:', biomeUpdateResponse.data);
+
+      // Associate donations and gift_donations with biome
+      if (donationResponse.data.data) {
+        const donationId = donationResponse.data.data.id;
+        await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
+          donations: [...matchingBiome.attributes.donations, donationId]
+        }, {
+          headers: {
+            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+
+      if (giftDonationResponse?.data?.data) {
+        const giftDonationId = giftDonationResponse.data.data.id;
+        await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
+          gift_donations: [...matchingBiome.attributes.gift_donations, giftDonationId]
+        }, {
+          headers: {
+            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
     } else {
       console.error(`Biome "${biomeName}" not found. Available biomes:`, biomeResponse.data.data.map(b => b.attributes.name));
-      return res.status(404).send(`Biome "${biomeName}" not found`);
+      throw new Error(`Biome "${biomeName}" not found`);
     }
 
     // Create Donation
@@ -203,17 +248,25 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     });
     console.log('Donation creation response:', donationResponse.data);
 
-    // Handle GiftDonation if present
+    // Associate the donation with the user
+    await axios.put(`${STRAPI_URL}/api/users/${userId}`, {
+      donations: [...userResponse.data[0].donations, donationResponse.data.data.id]
+    }, {
+      headers: {
+        'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Create GiftDonation if applicable
     if (friendName && friendEmail) {
       console.log('Creating GiftDonation');
       const giftDonationResponse = await axios.post(`${STRAPI_URL}/api/gift-donations`, {
         data: {
           amount: amount,
-          donationDate: billingDateStr || new Date().toISOString(),
+          giftDate: billingDateStr || new Date().toISOString(),
           user: userId, // Set relation to the user
-          biome: biomeId, // Set relation to the biome
-          friendName: friendName,
-          friendEmail: friendEmail
+          biome: biomeId // Set relation to the biome
         }
       }, {
         headers: {
@@ -222,42 +275,22 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         }
       });
       console.log('GiftDonation creation response:', giftDonationResponse.data);
+
+      // Associate the gift donation with the user
+      await axios.put(`${STRAPI_URL}/api/users/${userId}`, {
+        gift_donations: [...userResponse.data[0].gift_donations, giftDonationResponse.data.data.id]
+      }, {
+        headers: {
+          'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
     }
 
-    // Associate CardsCollected based on totalPoints
-    console.log('Associating CardsCollected');
-    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards-collecteds?filters[pointsRequired][$lte]=${totalPoints}`, {
-      headers: {
-        'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    console.log('Cards response:', cardsResponse.data);
-
-    if (cardsResponse.data && cardsResponse.data.data.length > 0) {
-      for (const card of cardsResponse.data.data) {
-        console.log(`Associating existing card ID: ${card.id} with user ID: ${userId}`);
-
-        // Update existing CardsCollected with the user's ID
-        const cardAssociationResponse = await axios.put(`${STRAPI_URL}/api/cards-collecteds/${card.id}`, {
-          data: {
-            users: { connect: [{ id: userId }] } // Connect user to card
-          }
-        }, {
-          headers: {
-            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        console.log('Card association response:', cardAssociationResponse.data);
-      }
-    }
-
-    console.log('ITN process completed successfully');
-    res.status(200).send('ITN Processed');
+    return res.status(200).send('ITN processed successfully');
   } catch (error) {
-    console.error('Error processing ITN:', error);
-    res.status(500).send('Internal Server Error');
+    console.error('Error processing ITN:', error.message);
+    return res.status(500).send('Internal Server Error');
   }
 });
 
