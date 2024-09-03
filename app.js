@@ -100,7 +100,6 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         });
         console.log('UserProfile update response:', updateResponse.data);
       } else {
-        // Handle error case for missing UserProfile
         console.error('UserProfile not found for existing user');
         return res.status(404).send('UserProfile not found for existing user');
       }
@@ -129,7 +128,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         data: {
           amountDonated: amount,
           totalPoints: totalPoints,
-          user: userId,
+          user: userId, // Set relation to the user
           token: token,
           friendName: friendName,
           friendEmail: friendEmail,
@@ -190,8 +189,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       data: {
         amount: amount,
         donationDate: billingDateStr || new Date().toISOString(),
-        user: userId,
-        biome: biomeId
+        user: userId, // Set relation to the user
+        biome: biomeId // Set relation to the biome
       }
     }, {
       headers: {
@@ -208,8 +207,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         data: {
           amount: amount,
           donationDate: billingDateStr || new Date().toISOString(),
-          user: userId,
-          biome: biomeId,
+          user: userId, // Set relation to the user
+          biome: biomeId, // Set relation to the biome
           friendName: friendName,
           friendEmail: friendEmail
         }
@@ -234,11 +233,12 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 
     if (cardsResponse.data && cardsResponse.data.data.length > 0) {
       for (const card of cardsResponse.data.data) {
-        // Create a new CardsCollected association
-        await axios.post(`${STRAPI_URL}/api/cards-collecteds`, {
+        console.log(`Associating existing card ID: ${card.id} with user ID: ${userId}`);
+        
+        // Update existing CardsCollected with the user's ID
+        const cardAssociationResponse = await axios.put(`${STRAPI_URL}/api/cards-collecteds/${card.id}`, {
           data: {
-            user: userId,
-            card: card.id
+            user: userId
           }
         }, {
           headers: {
@@ -246,16 +246,18 @@ app.post('/process-itn', upload.none(), async (req, res) => {
             'Content-Type': 'application/json'
           }
         });
+        console.log('Card association response:', cardAssociationResponse.data);
       }
       console.log('CardsCollected association complete');
     } else {
       console.warn('No cards found for the given totalPoints');
     }
 
-    res.status(200).json({ message: 'ITN processed successfully' });
+    console.log('ITN process completed successfully');
+    res.status(200).send('ITN Processed Successfully');
   } catch (error) {
-    console.error('Error processing ITN:', error.response ? error.response.data : error.message);
-    res.status(500).json({ error: 'Error processing ITN', details: error.message });
+    console.error('Error processing ITN:', error.message);
+    res.status(500).send('Internal Server Error');
   }
 });
 
