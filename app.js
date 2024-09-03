@@ -1,3 +1,5 @@
+
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
@@ -33,7 +35,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       decodedBody[key] = he.decode(value);
     }
     console.log('Received payload (decoded):', decodedBody);
-    
+
     const payload = decodedBody;
     const userEmail = payload.email_address;
     const biomeName = payload.custom_str3 || '';
@@ -87,11 +89,11 @@ app.post('/process-itn', upload.none(), async (req, res) => {
           data: {
             amountDonated: (userProfileResponse.data.data[0].attributes.amountDonated || 0) + amount,
             totalPoints: (userProfileResponse.data.data[0].attributes.totalPoints || 0) + totalPoints,
+            user: { id: userId }, // Ensuring relationship is set
             token: token,
             friendName: friendName,
             friendEmail: friendEmail,
-            billingDate: billingDateStr,
-            user: userId // Ensure relation to user
+            billingDate: billingDateStr
           }
         }, {
           headers: {
@@ -112,9 +114,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         email: userEmail,
         username: payload.name_first || userEmail,
         password: randomPassword,
-        role: {
-          connect: [{ id: 1 }]
-        }
+        role: 1 // Assigning the role directly by ID
       }, {
         headers: {
           'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
@@ -129,7 +129,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         data: {
           amountDonated: amount,
           totalPoints: totalPoints,
-          user: userId, // Set relation to the user
+          user: { id: userId }, // Ensuring relationship is set
           token: token,
           friendName: friendName,
           friendEmail: friendEmail,
@@ -160,22 +160,17 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     console.log('All Biomes response:', biomeResponse.data);
 
     let biomeId;
-    const matchingBiome = biomeResponse.data.data.find(biome => 
+    const matchingBiome = biomeResponse.data.data.find(biome =>
       biome.attributes.name.trim().toLowerCase() === biomeName.trim().toLowerCase()
     );
 
     if (matchingBiome) {
       biomeId = matchingBiome.id;
       console.log('Matching Biome found, ID:', biomeId);
-
-      // Check if the users attribute is an array
-      const existingUsers = Array.isArray(matchingBiome.attributes.users) ? matchingBiome.attributes.users : [];
-
       console.log('Updating existing Biome');
       const biomeUpdateResponse = await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
         data: {
-          totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount,
-          users: [...existingUsers, userId] // Associate user with biome
+          totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount
         }
       }, {
         headers: {
@@ -195,8 +190,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       data: {
         amount: amount,
         donationDate: billingDateStr || new Date().toISOString(),
-        user: userId, // Set relation to the user
-        biome: biomeId // Set relation to the biome
+        user: { id: userId }, // Ensuring relationship is set
+        biome: { id: biomeId } // Ensuring relationship is set
       }
     }, {
       headers: {
@@ -213,8 +208,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         data: {
           amount: amount,
           donationDate: billingDateStr || new Date().toISOString(),
-          user: userId, // Set relation to the user
-          biome: biomeId, // Set relation to the biome
+          user: { id: userId }, // Ensuring relationship is set
+          biome: { id: biomeId }, // Ensuring relationship is set
           friendName: friendName,
           friendEmail: friendEmail
         }
@@ -229,7 +224,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 
     // Associate CardsCollected based on totalPoints
     console.log('Associating CardsCollected');
-    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards?filters[pointsRequired][$lte]=${totalPoints}`, {
+    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards-collecteds?filters[pointsRequired][$lte]=${totalPoints}`, {
       headers: {
         'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
         'Content-Type': 'application/json'
@@ -240,12 +235,11 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     if (cardsResponse.data && cardsResponse.data.data.length > 0) {
       for (const card of cardsResponse.data.data) {
         console.log(`Associating existing card ID: ${card.id} with user ID: ${userId}`);
-        
-        // Create or associate CardsCollected with the user's ID
-        await axios.post(`${STRAPI_URL}/api/cards-collecteds`, {
+
+        // Update existing CardsCollected with the user's ID
+        const cardAssociationResponse = await axios.put(`${STRAPI_URL}/api/cards-collecteds/${card.id}`, {
           data: {
-            user: userId, // Set relation to the user
-            card: card.id // Set relation to the card
+            user: { id: userId } // Ensuring relationship is set
           }
         }, {
           headers: {
@@ -253,20 +247,18 @@ app.post('/process-itn', upload.none(), async (req, res) => {
             'Content-Type': 'application/json'
           }
         });
+        console.log('Card association response:', cardAssociationResponse.data);
       }
-      console.log('CardsCollected association complete');
-    } else {
-      console.warn('No cards found for the given totalPoints');
     }
 
-    console.log('ITN process completed successfully');
-    res.status(200).send('ITN Processed Successfully');
+    console.log('ITN processing complete');
+    res.status(200).send('ITN processed successfully');
   } catch (error) {
-    console.error('Error processing ITN:', error.message);
-    res.status(500).send('Internal Server Error');
+    console.error('Error processing ITN:', error);
+    res.status(500).send('Error processing ITN');
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });
