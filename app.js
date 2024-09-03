@@ -89,7 +89,6 @@ app.post('/process-itn', upload.none(), async (req, res) => {
           data: {
             amountDonated: (userProfileResponse.data.data[0].attributes.amountDonated || 0) + amount,
             totalPoints: (userProfileResponse.data.data[0].attributes.totalPoints || 0) + totalPoints,
-            user: { id: userId }, // Ensuring relationship is set
             token: token,
             friendName: friendName,
             friendEmail: friendEmail,
@@ -114,7 +113,9 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         email: userEmail,
         username: payload.name_first || userEmail,
         password: randomPassword,
-        role: 1 // Assigning the role directly by ID
+        role: {
+          connect: [{ id: 1 }]
+        }
       }, {
         headers: {
           'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
@@ -129,7 +130,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         data: {
           amountDonated: amount,
           totalPoints: totalPoints,
-          user: { id: userId }, // Ensuring relationship is set
+          user: userId, // Set relation to the user
           token: token,
           friendName: friendName,
           friendEmail: friendEmail,
@@ -170,7 +171,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       console.log('Updating existing Biome');
       const biomeUpdateResponse = await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
         data: {
-          totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount
+          totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount,
+          users: { connect: [{ id: userId }] } // Connect user to biome
         }
       }, {
         headers: {
@@ -181,7 +183,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       console.log('Biome update response:', biomeUpdateResponse.data);
     } else {
       console.error(`Biome "${biomeName}" not found. Available biomes:`, biomeResponse.data.data.map(b => b.attributes.name));
-      throw new Error(`Biome "${biomeName}" not found`);
+      return res.status(404).send(`Biome "${biomeName}" not found`);
     }
 
     // Create Donation
@@ -190,8 +192,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       data: {
         amount: amount,
         donationDate: billingDateStr || new Date().toISOString(),
-        user: { id: userId }, // Ensuring relationship is set
-        biome: { id: biomeId } // Ensuring relationship is set
+        user: userId, // Set relation to the user
+        biome: biomeId // Set relation to the biome
       }
     }, {
       headers: {
@@ -208,8 +210,8 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         data: {
           amount: amount,
           donationDate: billingDateStr || new Date().toISOString(),
-          user: { id: userId }, // Ensuring relationship is set
-          biome: { id: biomeId }, // Ensuring relationship is set
+          user: userId, // Set relation to the user
+          biome: biomeId, // Set relation to the biome
           friendName: friendName,
           friendEmail: friendEmail
         }
@@ -239,7 +241,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         // Update existing CardsCollected with the user's ID
         const cardAssociationResponse = await axios.put(`${STRAPI_URL}/api/cards-collecteds/${card.id}`, {
           data: {
-            user: { id: userId } // Ensuring relationship is set
+            users: { connect: [{ id: userId }] } // Connect user to card
           }
         }, {
           headers: {
@@ -251,14 +253,14 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       }
     }
 
-    console.log('ITN processing complete');
-    res.status(200).send('ITN processed successfully');
+    console.log('ITN process completed successfully');
+    res.status(200).send('ITN Processed');
   } catch (error) {
     console.error('Error processing ITN:', error);
-    res.status(500).send('Error processing ITN');
+    res.status(500).send('Internal Server Error');
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
