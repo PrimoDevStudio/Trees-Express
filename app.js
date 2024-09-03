@@ -167,11 +167,15 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     if (matchingBiome) {
       biomeId = matchingBiome.id;
       console.log('Matching Biome found, ID:', biomeId);
+
+      // Check if the users attribute is an array
+      const existingUsers = Array.isArray(matchingBiome.attributes.users) ? matchingBiome.attributes.users : [];
+
       console.log('Updating existing Biome');
       const biomeUpdateResponse = await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
         data: {
           totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount,
-          users: [...matchingBiome.attributes.users, userId] // Associate user with biome
+          users: [...existingUsers, userId] // Associate user with biome
         }
       }, {
         headers: {
