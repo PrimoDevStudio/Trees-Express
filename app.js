@@ -224,7 +224,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 
     // Associate CardsCollected based on totalPoints
     console.log('Associating CardsCollected');
-    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards?filters[pointsRequired][$lte]=${totalPoints}`, {
+    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards-collecteds?filters[pointsRequired][$lte]=${totalPoints}`, {
       headers: {
         'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
         'Content-Type': 'application/json'
