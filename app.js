@@ -99,8 +99,25 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         });
         console.log('UserProfile update response:', updateResponse.data);
       } else {
-        console.error('UserProfile not found for existing user');
-        return res.status(404).send('UserProfile not found for existing user');
+        console.log('Creating UserProfile for existing user');
+        const userProfileCreateResponse = await axios.post(`${STRAPI_URL}/api/user-profiles`, {
+          data: {
+            amountDonated: amount,
+            totalPoints: totalPoints,
+            user: userId,
+            token: token,
+            friendName: friendName,
+            friendEmail: friendEmail,
+            billingDate: billingDateStr
+          }
+        }, {
+          headers: {
+            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        console.log('New UserProfile creation response:', userProfileCreateResponse.data);
+        userProfileId = userProfileCreateResponse.data.data.id;
       }
     } else {
       // User does not exist
@@ -143,9 +160,15 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       userProfileId = userProfileCreateResponse.data.data.id;
     }
 
-    if (!userProfileId) {
-      throw new Error('UserProfile ID is not set');
-    }
+    // Associate user_profile with user
+    await axios.put(`${STRAPI_URL}/api/users/${userId}`, {
+      user_profile: userProfileId
+    }, {
+      headers: {
+        'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
 
     // Handle Biome
     console.log('Searching for Biome:', biomeName);
@@ -201,9 +224,10 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     console.log('Donation creation response:', donationResponse.data);
 
     // Handle GiftDonation if present
+    let giftDonationResponse;
     if (friendName && friendEmail) {
       console.log('Creating GiftDonation');
-      const giftDonationResponse = await axios.post(`${STRAPI_URL}/api/gift-donations`, {
+      giftDonationResponse = await axios.post(`${STRAPI_URL}/api/gift-donations`, {
         data: {
           amount: amount,
           donationDate: billingDateStr || new Date().toISOString(),
@@ -220,6 +244,22 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       });
       console.log('GiftDonation creation response:', giftDonationResponse.data);
     }
+
+    // Update Biome with new donations and gift donations
+    const biomeUpdateData = {
+      data: {
+        donations: { connect: [{ id: donationResponse.data.data.id }] }
+      }
+    };
+    if (giftDonationResponse) {
+      biomeUpdateData.data.gift_donations = { connect: [{ id: giftDonationResponse.data.data.id }] };
+    }
+    await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, biomeUpdateData, {
+      headers: {
+        'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
 
     // Associate CardsCollected based on totalPoints
     console.log('Associating CardsCollected');
