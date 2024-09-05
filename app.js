@@ -84,8 +84,12 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         console.log('Updating existing UserProfile, ID:', userProfileId);
         const updateResponse = await axios.put(`${STRAPI_URL}/api/user-profiles/${userProfileId}`, {
           data: {
-            amountDonated: (userProfileResponse.data.data[0].attributes.amountDonated || 0) + amount,
-            totalPoints: (userProfileResponse.data.data[0].attributes.totalPoints || 0) + totalPoints,
+            amountDonated: {
+              $add: amount
+            },
+            totalPoints: {
+              $add: totalPoints
+            },
             token: token,
             friendName: friendName,
             friendEmail: friendEmail,
@@ -189,10 +193,16 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       biomeId = matchingBiome.id;
       console.log('Matching Biome found, ID:', biomeId);
       console.log('Updating existing Biome');
+      
+      // Check if user is already associated with the Biome
+      const isUserAssociated = matchingBiome.attributes.users.data.some(user => user.id === userId);
+      
       const biomeUpdateResponse = await axios.put(`${STRAPI_URL}/api/biomes/${biomeId}`, {
         data: {
-          totalDonated: (matchingBiome.attributes.totalDonated || 0) + amount,
-          users: { connect: [{ id: userId }] }
+          totalDonated: {
+            $add: amount
+          },
+          users: isUserAssociated ? undefined : { connect: [{ id: userId }] }
         }
       }, {
         headers: {
@@ -287,19 +297,25 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 
     if (cardsResponse.data && cardsResponse.data.data.length > 0) {
       for (const card of cardsResponse.data.data) {
-        console.log(`Associating existing card ID: ${card.id} with user ID: ${userId}`);
-        // Update existing CardsCollected with the user's ID
-        const cardAssociationResponse = await axios.put(`${STRAPI_URL}/api/cards-collecteds/${card.id}`, {
-          data: {
-            users: { connect: [{ id: userId }] }
-          }
-        }, {
-          headers: {
-            'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        console.log('Card association response:', cardAssociationResponse.data);
+        // Check if the user already has this card
+        const userHasCard = card.attributes.users.data.some(user => user.id === userId);
+        
+        if (!userHasCard) {
+          console.log(`Associating card ID: ${card.id} with user ID: ${userId}`);
+          const cardAssociationResponse = await axios.put(`${STRAPI_URL}/api/cards-collecteds/${card.id}`, {
+            data: {
+              users: { connect: [{ id: userId }] }
+            }
+          }, {
+            headers: {
+              'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          console.log('Card association response:', cardAssociationResponse.data);
+        } else {
+          console.log(`User already has card ID: ${card.id}`);
+        }
       }
     }
 
