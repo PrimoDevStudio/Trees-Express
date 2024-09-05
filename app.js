@@ -41,7 +41,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const token = payload.token || '';
     const friendName = payload.custom_str1 || '';
     const friendEmail = payload.custom_str2 || '';
-    const billingDateStr = payload.billing_date || new Date().toISOString();;
+    const billingDateStr = payload.billing_date || new Date().toISOString();
     const totalPoints = parseInt(payload.custom_int1, 10) || 0;
 
     console.log('Extracted data:', { userEmail, biomeName, amount, token, friendName, friendEmail, billingDateStr, totalPoints });
@@ -211,7 +211,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const donationResponse = await axios.post(`${STRAPI_URL}/api/donations`, {
       data: {
         amount: amount,
-        donationDate: billingDateStr || new Date().toISOString(),
+        donationDate: billingDateStr,
         user: { connect: [{ id: userId }] },
         biome: { connect: [{ id: biomeId }] }
       }
@@ -230,7 +230,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       giftDonationResponse = await axios.post(`${STRAPI_URL}/api/gift-donations`, {
         data: {
           amount: amount,
-          donationDate: billingDateStr || new Date().toISOString(),
+          donationDate: billingDateStr,
           user: { connect: [{ id: userId }] },
           biome: { connect: [{ id: biomeId }] },
           friendName: friendName,
@@ -275,21 +275,24 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       }
     });
 
-    // Associate CardsCollected based on totalPoints
-    console.log('Associating CardsCollected');
-    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards-collecteds?filters[pointsRequired][$lte]=${totalPoints}`, {
+    // Fetch All Cards
+    console.log('Fetching all CardsCollected');
+    const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards-collecteds`, {
       headers: {
         'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
         'Content-Type': 'application/json'
       }
     });
-    console.log('Cards response:', cardsResponse.data);
+    console.log('All Cards response:', cardsResponse.data);
 
-    if (cardsResponse.data && cardsResponse.data.data.length > 0) {
-      for (const card of cardsResponse.data.data) {
-        console.log(`Associating existing card ID: ${card.id} with user ID: ${userId}`);
-        // Update existing CardsCollected with the user's ID
-        const cardAssociationResponse = await axios.put(`${STRAPI_URL}/api/cards-collecteds/${card.id}`, {
+    // Filter cards based on totalPoints
+    const userCards = [];
+    for (const card of cardsResponse.data.data) {
+      if (totalPoints >= card.attributes.pointsRequired) {
+        userCards.push(card.id);
+        console.log(`Associating card ID: ${card.id} with user ID: ${userId}`);
+        // Associate the card with the user
+        await axios.put(`${STRAPI_URL}/api/cards-collecteds/${card.id}`, {
           data: {
             users: { connect: [{ id: userId }] }
           }
@@ -299,7 +302,6 @@ app.post('/process-itn', upload.none(), async (req, res) => {
             'Content-Type': 'application/json'
           }
         });
-        console.log('Card association response:', cardAssociationResponse.data);
       }
     }
 
