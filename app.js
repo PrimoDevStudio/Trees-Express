@@ -275,6 +275,18 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       }
     });
 
+    // Fetch User Profile to get the total points
+    console.log('Fetching user profile to get total points');
+    const userProfileResponse = await axios.get(`${STRAPI_URL}/api/user-profiles/${userProfileId}`, {
+      headers: {
+        'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const currentTotalPoints = userProfileResponse.data.data.attributes.totalPoints;
+
+    console.log('Current total points for the user:', currentTotalPoints);
+
     // Fetch All Cards
     console.log('Fetching all CardsCollected');
     const cardsResponse = await axios.get(`${STRAPI_URL}/api/cards-collecteds`, {
@@ -285,11 +297,9 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     });
     console.log('All Cards response:', cardsResponse.data);
 
-    // Filter cards based on totalPoints
-    const userCards = [];
+    // Associate all cards based on totalPoints
     for (const card of cardsResponse.data.data) {
-      if (totalPoints >= card.attributes.pointsRequired) {
-        userCards.push(card.id);
+      if (currentTotalPoints >= card.attributes.pointsRequired) {
         console.log(`Associating card ID: ${card.id} with user ID: ${userId}`);
         // Associate the card with the user
         await axios.put(`${STRAPI_URL}/api/cards-collecteds/${card.id}`, {
