@@ -245,6 +245,20 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       console.log('GiftDonation creation response:', giftDonationResponse.data);
     }
 
+    // Update User with new donations and gift donations
+    const userUpdateData = {
+      donations: { connect: [{ id: donationResponse.data.data.id }] }
+    };
+    if (giftDonationResponse) {
+      userUpdateData.gift_donations = { connect: [{ id: giftDonationResponse.data.data.id }] };
+    }
+    await axios.put(`${STRAPI_URL}/api/users/${userId}`, userUpdateData, {
+      headers: {
+        'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
     // Update Biome with new donations and gift donations
     const biomeUpdateData = {
       data: {
