@@ -41,7 +41,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const token = payload.token || '';
     const friendName = payload.custom_str1 || '';
     const friendEmail = payload.custom_str2 || '';
-    const billingDateStr = payload.billing_date || '';
+    const billingDateStr = payload.billing_date || new Date().toISOString(); // Default to current date if empty
     const totalPoints = parseInt(payload.custom_int1, 10) || 0;
 
     console.log('Extracted data:', { userEmail, biomeName, amount, token, friendName, friendEmail, billingDateStr, totalPoints });
@@ -211,7 +211,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     const donationResponse = await axios.post(`${STRAPI_URL}/api/donations`, {
       data: {
         amount: amount,
-        donationDate: billingDateStr || new Date().toISOString(),
+        donationDate: billingDateStr,
         user: { connect: [{ id: userId }] },
         biome: { connect: [{ id: biomeId }] }
       }
@@ -230,7 +230,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
       giftDonationResponse = await axios.post(`${STRAPI_URL}/api/gift-donations`, {
         data: {
           amount: amount,
-          donationDate: billingDateStr || new Date().toISOString(),
+          donationDate: billingDateStr,
           user: { connect: [{ id: userId }] },
           biome: { connect: [{ id: biomeId }] },
           friendName: friendName,
