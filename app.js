@@ -352,6 +352,17 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 });
 
 // New route to handle subscription cancellation
+const generateSignatureForCancelSubscription = (params, passphrase) => {
+  const keys = Object.keys(params).sort();
+  let paramString = keys.map(key => `${key}=${encodeURIComponent(params[key])}`).join('&');
+  
+  if (passphrase !== null && passphrase !== '') {
+    paramString += `&passphrase=${encodeURIComponent(passphrase)}`;
+  }
+
+  return crypto.createHash('md5').update(paramString).digest('hex');
+};
+
 app.post('/cancel-subscription', async (req, res) => {
   const { token } = req.body;
 
@@ -376,7 +387,7 @@ app.post('/cancel-subscription', async (req, res) => {
 
     console.log('Headers:', headers);
 
-    const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel${process.env.NODE_ENV === 'development' ? '?testing=true' : ''}`;
+    const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
     console.log('Request URL:', url);
 
     const response = await axios.put(url, {}, { headers });
@@ -393,6 +404,7 @@ app.post('/cancel-subscription', async (req, res) => {
     res.status(500).json({ message: 'Error canceling subscription', error: error.response?.data || error.message });
   }
 });
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
