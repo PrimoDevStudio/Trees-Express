@@ -14,6 +14,10 @@ const PAYFAST_MERCHANT_ID = process.env.PAYFAST_MERCHANT_ID;
 const PAYFAST_PASS_PHRASE = process.env.PAYFAST_PASS_PHRASE;
 const PAYFAST_API_URL = process.env.PAYFAST_API_URL;
 const PAYFAST_API_VERSION = 'v1';
+const getIso8601Timestamp = () => {
+  const now = new Date();
+  return now.toISOString();
+};
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -377,12 +381,11 @@ app.post('/cancel-subscription', async (req, res) => {
 
     // Generate the signature
     const signature = generateSignatureForCancelSubscription(headers, PAYFAST_PASS_PHRASE);
-
-    // Add signature to headers
     headers['signature'] = signature;
 
-    // Log the headers for debugging purposes
+    // Log the headers and URL for debugging purposes
     console.log('Headers:', headers);
+    console.log('Request URL:', `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`);
 
     // Make the PUT request to PayFast to cancel the subscription
     const response = await axios.put(
@@ -390,6 +393,9 @@ app.post('/cancel-subscription', async (req, res) => {
       {}, // No body needed
       { headers }
     );
+
+    // Log the full response for debugging
+    console.log('PayFast Response:', response.data);
 
     if (response.data && response.data.status === 'success') {
       res.status(200).json({ message: 'Subscription cancelled successfully', data: response.data });
