@@ -366,6 +366,34 @@ const getIso8601Timestamp = () => {
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
 };
 
+const generatePayFastApiSignature = (data, passPhrase = null) => {
+  // Convert any booleans to 'true' or 'false' strings
+  let pfData = Object.entries(data).reduce((acc, [key, value]) => {
+    acc[key] = typeof value === 'boolean' ? value.toString() : value;
+    return acc;
+  }, {});
+
+  // Remove signature if it exists
+  delete pfData.signature;
+
+  // Sort keys alphabetically
+  pfData = Object.keys(pfData)
+    .sort()
+    .reduce((acc, key) => ({ ...acc, [key]: pfData[key] }), {});
+
+  // Create parameter string
+  let pfParamString = Object.entries(pfData)
+    .map(([key, value]) => `${key}=${encodeURIComponent(value.trim()).replace(/%20/g, "+").replace(/[!'()]/g, escape).replace(/\*/g, "%2A")}`)
+    .join("&");
+
+  // Add passPhrase if it exists
+  if (passPhrase !== null && passPhrase.trim() !== '') {
+    pfParamString += `&passphrase=${encodeURIComponent(passPhrase.trim()).replace(/%20/g, "+")}`;
+  }
+
+  // Generate signature and convert to lowercase
+  return crypto.createHash("md5").update(pfParamString).digest("hex").toLowerCase();
+};
 // Route to handle subscription cancellation
 app.post('/cancel-subscription', async (req, res) => {
   const { token } = req.body;
