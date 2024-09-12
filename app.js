@@ -366,6 +366,7 @@ const getIso8601Timestamp = () => {
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
 };
 
+// Function to generate PayFast API signature
 const generatePayFastApiSignature = (data, passPhrase) => {
   // Ensure all values are strings and trimmed
   let pfData = Object.entries(data).reduce((acc, [key, value]) => {
@@ -387,8 +388,16 @@ const generatePayFastApiSignature = (data, passPhrase) => {
   // Always append the passphrase
   pfParamString += `&passphrase=${encodeURIComponent(passPhrase.trim()).replace(/%20/g, '+')}`;
 
+  // Log the parameter string before hashing
+  console.log('Parameter String for Signature:', pfParamString);
+
   // Generate MD5 hash of the string and convert to lowercase
-  return crypto.createHash('md5').update(pfParamString).digest('hex').toLowerCase();
+  const signature = crypto.createHash('md5').update(pfParamString).digest('hex').toLowerCase();
+
+  // Log the generated signature
+  console.log('Generated Signature:', signature);
+
+  return signature;
 };
 
 // Route to handle subscription cancellation
@@ -418,16 +427,19 @@ app.post('/cancel-subscription', async (req, res) => {
       signature: signature,
     };
 
+    // Log request headers
     console.log('Request Headers:', headers);
 
     // API URL
     const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
 
+    // Log request URL
     console.log('Request URL:', url);
 
     // Sending the request to PayFast
     const response = await axios.put(url, {}, { headers });
 
+    // Log PayFast response
     console.log('PayFast Response:', response.data);
 
     if (response.data && response.data.status === 'success') {
@@ -436,6 +448,7 @@ app.post('/cancel-subscription', async (req, res) => {
       res.status(500).json({ message: 'Failed to cancel subscription', data: response.data });
     }
   } catch (error) {
+    // Log error response
     console.error('Error canceling subscription:', error.response?.data || error.message);
     res.status(500).json({ message: 'Error canceling subscription', error: error.response?.data || error.message });
   }
