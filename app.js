@@ -86,7 +86,12 @@ app.post('/process-itn', upload.none(), async (req, res) => {
           data: {
             amountDonated: (userProfileResponse.data.data[0].attributes.amountDonated || 0) + amount,
             totalPoints: (userProfileResponse.data.data[0].attributes.totalPoints || 0) + totalPoints,
-            token: token,
+            subscriptions: [
+              {
+                token: token,
+                amount: amount
+              }
+            ],
             friendName: friendName,
             friendEmail: friendEmail,
             billingDate: billingDateStr
@@ -105,7 +110,12 @@ app.post('/process-itn', upload.none(), async (req, res) => {
             amountDonated: amount,
             totalPoints: totalPoints,
             user: userId,
-            token: token,
+            subscriptions: [
+              {
+                token: token,
+                amount: amount
+              }
+            ],
             friendName: friendName,
             friendEmail: friendEmail,
             billingDate: billingDateStr
@@ -145,7 +155,12 @@ app.post('/process-itn', upload.none(), async (req, res) => {
           amountDonated: amount,
           totalPoints: totalPoints,
           user: userId,
-          token: token,
+          subscriptions: [
+            {
+              token: token,
+              amount: amount
+            }
+          ],
           friendName: friendName,
           friendEmail: friendEmail,
           billingDate: billingDateStr
@@ -169,7 +184,6 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         'Content-Type': 'application/json'
       }
     });
-
     // Handle Biome
     console.log('Searching for Biome:', biomeName);
     const biomeResponse = await axios.get(`${STRAPI_URL}/api/biomes`, {
