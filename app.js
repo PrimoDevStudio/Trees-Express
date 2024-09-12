@@ -26,15 +26,6 @@ app.use(cors({
   origin: STRAPI_URL
 }));
 
-// Updated generateSignature for specific ordering (no alphabetization)
-const generateSignatureForCancelSubscription = (params, passphrase) => {
-  // The exact order PayFast wants for cancel subscription
-  const orderedParams = `merchant-id=${params['merchant-id']}&version=${params['version']}&timestamp=${params['timestamp']}&passphrase=${passphrase}`;
-  
-  // Create MD5 hash of the ordered parameters
-  return crypto.createHash('md5').update(orderedParams).digest('hex').toLowerCase();
-};
-
 // Log incoming requests
 app.use((req, res, next) => {
   console.log('Incoming request headers:', req.headers);
@@ -361,6 +352,17 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 });
 
 // New route to handle subscription cancellation
+const generateSignatureForCancelSubscription = (params, passphrase) => {
+  const orderedParams = [
+    `merchant-id=${params['merchant-id']}`,
+    `version=${params['version']}`,
+    `timestamp=${params['timestamp']}`,
+    `passphrase=${passphrase}`
+  ].join('&');
+  
+  return crypto.createHash('md5').update(orderedParams).digest('hex').toLowerCase();
+};
+
 app.post('/cancel-subscription', async (req, res) => {
   const { token } = req.body;
 
@@ -369,32 +371,23 @@ app.post('/cancel-subscription', async (req, res) => {
   }
 
   try {
-    // Generate the ISO-8601 timestamp
     const timestamp = getIso8601Timestamp();
-
-    // Build the headers for PayFast API request
     const headers = {
       'merchant-id': PAYFAST_MERCHANT_ID,
       'version': PAYFAST_API_VERSION,
       'timestamp': timestamp,
     };
 
-    // Generate the signature
     const signature = generateSignatureForCancelSubscription(headers, PAYFAST_PASS_PHRASE);
     headers['signature'] = signature;
 
-    // Log the headers and URL for debugging purposes
     console.log('Headers:', headers);
-    console.log('Request URL:', `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`);
 
-    // Make the PUT request to PayFast to cancel the subscription
-    const response = await axios.put(
-      `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`,
-      {}, // No body needed
-      { headers }
-    );
+    const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
+    console.log('Request URL:', url);
 
-    // Log the full response for debugging
+    const response = await axios.put(url, {}, { headers });
+
     console.log('PayFast Response:', response.data);
 
     if (response.data && response.data.status === 'success') {
