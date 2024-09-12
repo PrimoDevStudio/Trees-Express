@@ -366,7 +366,7 @@ const getIso8601Timestamp = () => {
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
 };
 
-// Function to generate PayFast API signature
+// Signature generation function
 const generatePayFastApiSignature = (data, passPhrase) => {
   // Ensure all values are strings and trimmed
   let pfData = Object.entries(data).reduce((acc, [key, value]) => {
@@ -388,27 +388,11 @@ const generatePayFastApiSignature = (data, passPhrase) => {
   // Always append the passphrase
   pfParamString += `&passphrase=${encodeURIComponent(passPhrase.trim()).replace(/%20/g, '+')}`;
 
-  // Log the encoded parameter string before decoding
-  console.log('Encoded Parameter String for Signature:', pfParamString);
-
-  // Decode the parameter string
-  const decodedParamString = pfParamString
-    .replace(/\+/g, ' ')
-    .split('&')
-    .map(pair => pair.split('=').map(decodeURIComponent))
-    .map(([key, value]) => `${key}=${value}`)
-    .join('&');
-
-  // Log the decoded parameter string
-  console.log('Decoded Parameter String for Verification:', decodedParamString);
+  // Log the parameter string for verification
+  console.log('Decoded Parameter String for Verification:', pfParamString);
 
   // Generate MD5 hash of the string and convert to lowercase
-  const signature = crypto.createHash('md5').update(pfParamString).digest('hex').toLowerCase();
-
-  // Log the generated signature
-  console.log('Generated Signature:', signature);
-
-  return signature;
+  return crypto.createHash('md5').update(pfParamString).digest('hex').toLowerCase();
 };
 
 // Route to handle subscription cancellation
@@ -424,7 +408,7 @@ app.post('/cancel-subscription', async (req, res) => {
 
     const data = {
       'merchant-id': PAYFAST_MERCHANT_ID,
-      version: PAYFAST_API_VERSION, // Ensure this matches what PayFast expects
+      version: PAYFAST_API_VERSION,
       timestamp: timestamp,
     };
 
@@ -438,19 +422,16 @@ app.post('/cancel-subscription', async (req, res) => {
       signature: signature,
     };
 
-    // Log request headers
     console.log('Request Headers:', headers);
 
     // API URL
     const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
 
-    // Log request URL
     console.log('Request URL:', url);
 
     // Sending the request to PayFast
     const response = await axios.put(url, {}, { headers });
 
-    // Log PayFast response
     console.log('PayFast Response:', response.data);
 
     if (response.data && response.data.status === 'success') {
@@ -459,7 +440,6 @@ app.post('/cancel-subscription', async (req, res) => {
       res.status(500).json({ message: 'Failed to cancel subscription', data: response.data });
     }
   } catch (error) {
-    // Log error response
     console.error('Error canceling subscription:', error.response?.data || error.message);
     res.status(500).json({ message: 'Error canceling subscription', error: error.response?.data || error.message });
   }
