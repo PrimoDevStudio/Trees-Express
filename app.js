@@ -24,12 +24,16 @@ app.use(cors({
 
 // Updated generateSignature for specific ordering (no alphabetization)
 const generateSignatureForCancelSubscription = (params, passphrase) => {
-  // The order PayFast wants for cancel subscription
+  // Construct the parameters string in the exact order required
   const orderedParams = `merchant-id=${params['merchant-id']}&version=${params['version']}&timestamp=${params['timestamp']}&passphrase=${passphrase}`;
-  
+
+  // Log the string to be hashed for debugging purposes
+  console.log('String to hash:', orderedParams);
+
   // Create MD5 hash of the ordered parameters
   return crypto.createHash('md5').update(orderedParams).digest('hex').toLowerCase();
 };
+
 
 // Log incoming requests
 app.use((req, res, next) => {
@@ -375,11 +379,14 @@ app.post('/cancel-subscription', async (req, res) => {
       'timestamp': timestamp,
     };
 
-    // Add signature (MD5 hash of headers in the exact order required)
+    // Generate the signature
     const signature = generateSignatureForCancelSubscription(headers, PAYFAST_PASS_PHRASE);
 
     // Add signature to headers
     headers['signature'] = signature;
+
+    // Log the headers for debugging purposes
+    console.log('Headers:', headers);
 
     // Make the PUT request to PayFast to cancel the subscription
     const response = await axios.put(
