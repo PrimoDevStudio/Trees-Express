@@ -10,6 +10,9 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const STRAPI_URL = process.env.STRAPI_URL;
 const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
+const PAYFAST_MERCHANT_ID = process.env.PAYFAST_MERCHANT_ID;
+const PAYFAST_PASS_PHRASE = process.env.PAYFAST_PASS_PHRASE;
+const PAYFAST_API_VERSION = 'v1';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -17,6 +20,21 @@ app.use(bodyParser.json());
 app.use(cors({
   origin: STRAPI_URL
 }));
+
+// Helper to generate signature for PayFast
+const generateSignature = (params, passphrase) => {
+  // Alphabetically sort the parameters
+  const sortedParams = Object.keys(params)
+    .sort()
+    .map((key) => `${key}=${params[key]}`)
+    .join('&');
+
+  // Add the passphrase
+  const stringToHash = sortedParams + '&passphrase=' + passphrase;
+
+  // Create MD5 hash of the sorted parameters
+  return crypto.createHash('md5').update(stringToHash).digest('hex').toLowerCase();;
+};
 
 // Log incoming requests
 app.use((req, res, next) => {
@@ -340,6 +358,57 @@ app.post('/process-itn', upload.none(), async (req, res) => {
   } catch (error) {
     console.error('Error processing ITN:', error);
     res.status(500).send('Internal Server Error');
+  }
+});
+
+// New route to handle subscription cancellation
+app.post('/cancel-subscription', async (req, res) => {
+  const { token } = req.body; // Extract token from request body
+
+  if (!token) {
+    return res.status(400).json({ message: 'Subscription token is required' });
+  }
+
+  try {
+    // Generate the timestamp
+    const timestamp = new Date().toISOString();
+
+    // Build the headers for PayFast API request
+    const headers = {
+      'merchant-id': PAYFAST_MERCHANT_ID,
+      'version': PAYFAST_API_VERSION,
+      'timestamp': timestamp,
+    };
+
+    // Add signature (MD5 hash of headers)
+    const signatureParams = {
+      'merchant-id': PAYFAST_MERCHANT_ID,
+      'version': PAYFAST_API_VERSION,
+      'timestamp': timestamp,
+    };
+
+    const signature = generateSignature(signatureParams, PAYFAST_PASS_PHRASE);
+
+    // Add signature to headers
+    headers['signature'] = signature;
+
+    // Make the PUT request to PayFast to cancel the subscription
+    const response = await axios.put(
+      `${PAYFAST_API_URL}/subscriptions/${token}/cancel`,
+      {}, // No body needed
+      { headers }
+    );
+
+    if (response.data && response.data.status === 'success') {
+      // Success response from PayFast
+      res.status(200).json({ message: 'Subscription cancelled successfully', data: response.data });
+    } else {
+      // Failed to cancel subscription
+      res.status(500).json({ message: 'Failed to cancel subscription', data: response.data });
+    }
+  } catch (error) {
+    console.error('Error canceling subscription:', error.response?.data || error.message);
+    res.status(500).json({ message: 'Error canceling subscription', error: error.response?.data || error.message });
   }
 });
 
