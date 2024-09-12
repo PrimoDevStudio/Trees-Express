@@ -383,7 +383,7 @@ app.post('/cancel-subscription', async (req, res) => {
 
     // Make the PUT request to PayFast to cancel the subscription
     const response = await axios.put(
-      `${PAYFAST_API_URL}/subscriptions/${token}/cancel`,
+      `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`,
       {}, // No body needed
       { headers }
     );
