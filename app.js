@@ -16,7 +16,22 @@ const PAYFAST_API_URL = process.env.PAYFAST_API_URL;
 const PAYFAST_API_VERSION = 'v1';
 const getIso8601Timestamp = () => {
   const now = new Date();
-  return now.toISOString();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  
+  // Get timezone offset in minutes
+  const tzOffset = -now.getTimezoneOffset();
+  const tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0');
+  const tzMinutes = String(Math.abs(tzOffset) % 60).padStart(2, '0');
+  
+  // Construct the timezone string
+  const tzString = tzOffset >= 0 ? `+${tzHours}:${tzMinutes}` : `-${tzHours}:${tzMinutes}`;
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${tzString}`;
 };
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -372,6 +387,8 @@ app.post('/cancel-subscription', async (req, res) => {
 
   try {
     const timestamp = getIso8601Timestamp();
+    console.log('Generated timestamp:', timestamp);
+
     const params = {
       'merchant-id': PAYFAST_MERCHANT_ID,
       version: PAYFAST_API_VERSION,
