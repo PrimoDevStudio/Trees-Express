@@ -70,7 +70,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 
       // Check if UserProfile exists
       console.log('Searching for UserProfile');
-      const userProfileResponse = await axios.get(`${STRAPI_URL}/api/user-profiles?filters[user][id][$eq]=${userId}`, {
+      const userProfileResponse = await axios.get(`${STRAPI_URL}/api/user-profiles?filters[user][id][$eq]=${userId}&populate=*`, {
         headers: {
           'Authorization': `Bearer ${STRAPI_API_TOKEN}`,
           'Content-Type': 'application/json'
@@ -82,16 +82,21 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         // UserProfile exists
         userProfileId = userProfileResponse.data.data[0].id;
         console.log('Updating existing UserProfile, ID:', userProfileId);
+        
+        // Get existing subscriptions
+        const existingSubscriptions = userProfileResponse.data.data[0].attributes.subscriptions || [];
+        
+        // Add new subscription
+        existingSubscriptions.push({
+          token: token,
+          amount: amount
+        });
+
         const updateResponse = await axios.put(`${STRAPI_URL}/api/user-profiles/${userProfileId}`, {
           data: {
             amountDonated: (userProfileResponse.data.data[0].attributes.amountDonated || 0) + amount,
             totalPoints: (userProfileResponse.data.data[0].attributes.totalPoints || 0) + totalPoints,
-            subscriptions: [
-              {
-                token: token,
-                amount: amount
-              }
-            ],
+            subscriptions: existingSubscriptions,
             friendName: friendName,
             friendEmail: friendEmail,
             billingDate: billingDateStr
@@ -184,6 +189,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
         'Content-Type': 'application/json'
       }
     });
+
     // Handle Biome
     console.log('Searching for Biome:', biomeName);
     const biomeResponse = await axios.get(`${STRAPI_URL}/api/biomes`, {
