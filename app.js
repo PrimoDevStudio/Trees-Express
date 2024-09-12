@@ -14,25 +14,6 @@ const PAYFAST_MERCHANT_ID = process.env.PAYFAST_MERCHANT_ID;
 const PAYFAST_PASS_PHRASE = process.env.PAYFAST_PASS_PHRASE;
 const PAYFAST_API_URL = process.env.PAYFAST_API_URL;
 const PAYFAST_API_VERSION = 'v1';
-const getIso8601Timestamp = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  
-  // Get timezone offset in minutes
-  const tzOffset = -now.getTimezoneOffset();
-  const tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0');
-  const tzMinutes = String(Math.abs(tzOffset) % 60).padStart(2, '0');
-  
-  // Construct the timezone string
-  const tzString = tzOffset >= 0 ? `+${tzHours}:${tzMinutes}` : `-${tzHours}:${tzMinutes}`;
-  
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${tzString}`;
-};
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -396,6 +377,21 @@ const generatePayFastApiSignature = (data, passPhrase = null) => {
   return crypto.createHash("md5").update(pfParamString).digest("hex").toLowerCase();
 };
 
+// Function to get ISO 8601 timestamp in 'YYYY-MM-DDTHH:MM:SS' format
+const getIso8601Timestamp = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  
+  // Return timestamp in the format 'YYYY-MM-DDTHH:MM:SS'
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+};
+
+// Route to handle subscription cancellation
 app.post('/cancel-subscription', async (req, res) => {
   const { token } = req.body;
 
@@ -404,23 +400,23 @@ app.post('/cancel-subscription', async (req, res) => {
   }
 
   try {
-    const timestamp = new Date().toISOString();
+    const timestamp = getIso8601Timestamp();
     const data = {
-      'merchant-id': process.env.PAYFAST_MERCHANT_ID,
-      version: 'v1',
+      'merchant-id': PAYFAST_MERCHANT_ID,
+      version: PAYFAST_API_VERSION,
       timestamp: timestamp,
     };
 
-    const signature = generatePayFastApiSignature(data, process.env.PAYFAST_PASS_PHRASE);
-    
+    const signature = generatePayFastApiSignature(data, PAYFAST_PASS_PHRASE);
+
     const headers = {
       ...data,
-      signature: signature, // This will now be lowercase
+      signature: signature,
     };
 
     console.log('Request Headers:', headers);
 
-    const url = `${process.env.PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
+    const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
     console.log('Request URL:', url);
 
     const response = await axios.put(url, {}, { headers });
