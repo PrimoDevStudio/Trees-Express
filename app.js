@@ -24,16 +24,12 @@ app.use(cors({
 
 // Updated generateSignature for specific ordering (no alphabetization)
 const generateSignatureForCancelSubscription = (params, passphrase) => {
-  // Construct the parameters string in the exact order required
+  // The exact order PayFast wants for cancel subscription
   const orderedParams = `merchant-id=${params['merchant-id']}&version=${params['version']}&timestamp=${params['timestamp']}&passphrase=${passphrase}`;
-
-  // Log the string to be hashed for debugging purposes
-  console.log('String to hash:', orderedParams);
-
+  
   // Create MD5 hash of the ordered parameters
   return crypto.createHash('md5').update(orderedParams).digest('hex').toLowerCase();
 };
-
 
 // Log incoming requests
 app.use((req, res, next) => {
@@ -362,15 +358,15 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 
 // New route to handle subscription cancellation
 app.post('/cancel-subscription', async (req, res) => {
-  const { token } = req.body; // Extract token from request body
+  const { token } = req.body;
 
   if (!token) {
     return res.status(400).json({ message: 'Subscription token is required' });
   }
 
   try {
-    // Generate the timestamp
-    const timestamp = new Date().toISOString();
+    // Generate the ISO-8601 timestamp
+    const timestamp = getIso8601Timestamp();
 
     // Build the headers for PayFast API request
     const headers = {
@@ -396,10 +392,8 @@ app.post('/cancel-subscription', async (req, res) => {
     );
 
     if (response.data && response.data.status === 'success') {
-      // Success response from PayFast
       res.status(200).json({ message: 'Subscription cancelled successfully', data: response.data });
     } else {
-      // Failed to cancel subscription
       res.status(500).json({ message: 'Failed to cancel subscription', data: response.data });
     }
   } catch (error) {
