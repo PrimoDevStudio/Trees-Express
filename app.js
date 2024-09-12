@@ -366,10 +366,10 @@ const getIso8601Timestamp = () => {
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
 };
 
-const generatePayFastApiSignature = (data, passPhrase = null) => {
-  // Convert any booleans to 'true' or 'false' strings
+const generatePayFastApiSignature = (data, passPhrase) => {
+  // Ensure all values are strings and trimmed
   let pfData = Object.entries(data).reduce((acc, [key, value]) => {
-    acc[key] = typeof value === 'boolean' ? value.toString() : value;
+    acc[key] = typeof value === 'boolean' ? value.toString() : String(value).trim();
     return acc;
   }, {});
 
@@ -377,22 +377,18 @@ const generatePayFastApiSignature = (data, passPhrase = null) => {
   delete pfData.signature;
 
   // Sort keys alphabetically
-  pfData = Object.keys(pfData)
-    .sort()
-    .reduce((acc, key) => ({ ...acc, [key]: pfData[key] }), {});
+  const sortedKeys = Object.keys(pfData).sort();
 
-  // Create parameter string
-  let pfParamString = Object.entries(pfData)
-    .map(([key, value]) => `${key}=${encodeURIComponent(value.trim()).replace(/%20/g, "+").replace(/[!'()]/g, escape).replace(/\*/g, "%2A")}`)
-    .join("&");
+  // Create parameter string in the correct format
+  let pfParamString = sortedKeys
+    .map((key) => `${key}=${encodeURIComponent(pfData[key]).replace(/%20/g, '+')}`)
+    .join('&');
 
-  // Add passPhrase if it exists
-  if (passPhrase !== null && passPhrase.trim() !== '') {
-    pfParamString += `&passphrase=${encodeURIComponent(passPhrase.trim()).replace(/%20/g, "+")}`;
-  }
+  // Always append the passphrase
+  pfParamString += `&passphrase=${encodeURIComponent(passPhrase.trim()).replace(/%20/g, '+')}`;
 
-  // Generate signature and convert to lowercase
-  return crypto.createHash("md5").update(pfParamString).digest("hex").toLowerCase();
+  // Generate MD5 hash of the string and convert to lowercase
+  return crypto.createHash('md5').update(pfParamString).digest('hex').toLowerCase();
 };
 // Route to handle subscription cancellation
 app.post('/cancel-subscription', async (req, res) => {
@@ -403,13 +399,15 @@ app.post('/cancel-subscription', async (req, res) => {
   }
 
   try {
-    const timestamp = getIso8601Timestamp();
+    const timestamp = getIso8601Timestamp(); // Use your existing timestamp function
+
     const data = {
       'merchant-id': PAYFAST_MERCHANT_ID,
-      version: PAYFAST_API_VERSION,
+      version: PAYFAST_API_VERSION, // Ensure this matches what PayFast expects
       timestamp: timestamp,
     };
 
+    // Passphrase is always provided
     const signature = generatePayFastApiSignature(data, PAYFAST_PASS_PHRASE);
 
     const headers = {
@@ -421,10 +419,12 @@ app.post('/cancel-subscription', async (req, res) => {
 
     console.log('Request Headers:', headers);
 
+    // API URL
     const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
+
     console.log('Request URL:', url);
 
-    // Sending PUT request with headers
+    // Sending the request to PayFast
     const response = await axios.put(url, {}, { headers });
 
     console.log('PayFast Response:', response.data);
