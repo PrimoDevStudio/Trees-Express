@@ -352,17 +352,6 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 });
 
 // New route to handle subscription cancellation
-const generateSignatureForCancelSubscription = (params, passphrase) => {
-  const orderedParams = [
-    `merchant-id=${params['merchant-id']}`,
-    `version=${params['version']}`,
-    `timestamp=${params['timestamp']}`,
-    `passphrase=${passphrase}`
-  ].join('&');
-  
-  return crypto.createHash('md5').update(orderedParams).digest('hex').toLowerCase();
-};
-
 app.post('/cancel-subscription', async (req, res) => {
   const { token } = req.body;
 
@@ -372,18 +361,22 @@ app.post('/cancel-subscription', async (req, res) => {
 
   try {
     const timestamp = getIso8601Timestamp();
-    const headers = {
+    const params = {
       'merchant-id': PAYFAST_MERCHANT_ID,
-      'version': PAYFAST_API_VERSION,
-      'timestamp': timestamp,
+      version: PAYFAST_API_VERSION,
+      timestamp: timestamp,
     };
 
-    const signature = generateSignatureForCancelSubscription(headers, PAYFAST_PASS_PHRASE);
-    headers['signature'] = signature;
+    const signature = generateSignatureForCancelSubscription(params, PAYFAST_PASS_PHRASE);
+    
+    const headers = {
+      ...params,
+      signature: signature,
+    };
 
     console.log('Headers:', headers);
 
-    const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
+    const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel${process.env.NODE_ENV === 'development' ? '?testing=true' : ''}`;
     console.log('Request URL:', url);
 
     const response = await axios.put(url, {}, { headers });
@@ -400,7 +393,6 @@ app.post('/cancel-subscription', async (req, res) => {
     res.status(500).json({ message: 'Error canceling subscription', error: error.response?.data || error.message });
   }
 });
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
