@@ -385,7 +385,7 @@ const generatePayFastApiSignature = (data, passPhrase) => {
     .map((key) => `${key}=${encodeURIComponent(pfData[key]).replace(/%20/g, '+')}`)
     .join('&');
 
-  // Always append the passphrase
+  // Append the passphrase
   pfParamString += `&passphrase=${encodeURIComponent(passPhrase.trim()).replace(/%20/g, '+')}`;
 
   // Log the parameter string for verification
@@ -404,7 +404,7 @@ app.post('/cancel-subscription', async (req, res) => {
   }
 
   try {
-    const timestamp = getIso8601Timestamp(); // Use your existing timestamp function
+    const timestamp = getIso8601Timestamp();
 
     const data = {
       'merchant-id': PAYFAST_MERCHANT_ID,
@@ -412,7 +412,6 @@ app.post('/cancel-subscription', async (req, res) => {
       timestamp: timestamp,
     };
 
-    // Passphrase is always provided
     const signature = generatePayFastApiSignature(data, PAYFAST_PASS_PHRASE);
 
     const headers = {
@@ -423,14 +422,9 @@ app.post('/cancel-subscription', async (req, res) => {
     };
 
     console.log('Request Headers:', headers);
+    console.log('Request URL:', `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`);
 
-    // API URL
-    const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
-
-    console.log('Request URL:', url);
-
-    // Sending the request to PayFast
-    const response = await axios.put(url, {}, { headers });
+    const response = await axios.put(`${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`, {}, { headers });
 
     console.log('PayFast Response:', response.data);
 
