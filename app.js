@@ -388,8 +388,19 @@ const generatePayFastApiSignature = (data, passPhrase) => {
   // Always append the passphrase
   pfParamString += `&passphrase=${encodeURIComponent(passPhrase.trim()).replace(/%20/g, '+')}`;
 
-  // Log the parameter string before hashing
-  console.log('Parameter String for Signature:', pfParamString);
+  // Log the encoded parameter string before decoding
+  console.log('Encoded Parameter String for Signature:', pfParamString);
+
+  // Decode the parameter string
+  const decodedParamString = pfParamString
+    .replace(/\+/g, ' ')
+    .split('&')
+    .map(pair => pair.split('=').map(decodeURIComponent))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
+
+  // Log the decoded parameter string
+  console.log('Decoded Parameter String for Verification:', decodedParamString);
 
   // Generate MD5 hash of the string and convert to lowercase
   const signature = crypto.createHash('md5').update(pfParamString).digest('hex').toLowerCase();
