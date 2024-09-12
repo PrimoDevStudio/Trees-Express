@@ -22,19 +22,13 @@ app.use(cors({
   origin: STRAPI_URL
 }));
 
-// Helper to generate signature for PayFast
-const generateSignature = (params, passphrase) => {
-  // Alphabetically sort the parameters
-  const sortedParams = Object.keys(params)
-    .sort()
-    .map((key) => `${key}=${params[key]}`)
-    .join('&');
-
-  // Add the passphrase
-  const stringToHash = sortedParams + '&passphrase=' + passphrase;
-
-  // Create MD5 hash of the sorted parameters
-  return crypto.createHash('md5').update(stringToHash).digest('hex').toLowerCase();;
+// Updated generateSignature for specific ordering (no alphabetization)
+const generateSignatureForCancelSubscription = (params, passphrase) => {
+  // The order PayFast wants for cancel subscription
+  const orderedParams = `merchant-id=${params['merchant-id']}&version=${params['version']}&timestamp=${params['timestamp']}&passphrase=${passphrase}`;
+  
+  // Create MD5 hash of the ordered parameters
+  return crypto.createHash('md5').update(orderedParams).digest('hex').toLowerCase();
 };
 
 // Log incoming requests
@@ -381,21 +375,15 @@ app.post('/cancel-subscription', async (req, res) => {
       'timestamp': timestamp,
     };
 
-    // Add signature (MD5 hash of headers)
-    const signatureParams = {
-      'merchant-id': PAYFAST_MERCHANT_ID,
-      'version': PAYFAST_API_VERSION,
-      'timestamp': timestamp,
-    };
-
-    const signature = generateSignature(signatureParams, PAYFAST_PASS_PHRASE);
+    // Add signature (MD5 hash of headers in the exact order required)
+    const signature = generateSignatureForCancelSubscription(headers, PAYFAST_PASS_PHRASE);
 
     // Add signature to headers
     headers['signature'] = signature;
 
     // Make the PUT request to PayFast to cancel the subscription
     const response = await axios.put(
-      `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`,
+      `${PAYFAST_API_URL}/subscriptions/${token}/cancel`,
       {}, // No body needed
       { headers }
     );
