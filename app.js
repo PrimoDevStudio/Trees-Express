@@ -369,9 +369,7 @@ const getIso8601Timestamp = () => {
 const generatePayFastApiSignature = (data, passPhrase) => {
   // Ensure all values are strings and trimmed
   let pfData = Object.entries(data).reduce((acc, [key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      acc[key] = String(value).trim();
-    }
+    acc[key] = typeof value === 'boolean' ? value.toString() : String(value).trim();
     return acc;
   }, {});
 
@@ -388,14 +386,6 @@ const generatePayFastApiSignature = (data, passPhrase) => {
 
   // Always append the passphrase
   pfParamString += `&passphrase=${encodeURIComponent(passPhrase.trim()).replace(/%20/g, '+')}`;
-
-  // Ensure there's no trailing '&'
-  if (pfParamString.endsWith('&')) {
-    pfParamString = pfParamString.slice(0, -1);
-  }
-
-  // Debug: Print the parameter string
-  console.log('Param String for Signature:', pfParamString);
 
   // Generate MD5 hash of the string and convert to lowercase
   return crypto.createHash('md5').update(pfParamString).digest('hex').toLowerCase();
