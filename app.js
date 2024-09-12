@@ -347,7 +347,28 @@ app.post('/process-itn', upload.none(), async (req, res) => {
   }
 });
 
-// New route to handle subscription cancellation
+// Function to get ISO 8601 timestamp in 'YYYY-MM-DDTHH:MM:SS+HH:MM' format
+const getIso8601Timestamp = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+
+  // Get timezone offset in '+HH:MM' format
+  const offset = now.getTimezoneOffset();
+  const sign = offset > 0 ? '-' : '+';
+  const absOffset = Math.abs(offset);
+  const offsetHours = String(Math.floor(absOffset / 60)).padStart(2, '0');
+  const offsetMinutes = String(absOffset % 60).padStart(2, '0');
+  
+  // Return timestamp in the format 'YYYY-MM-DDTHH:MM:SS+HH:MM'
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offsetHours}:${offsetMinutes}`;
+};
+
+// Function to generate PayFast API signature
 const generatePayFastApiSignature = (data, passPhrase = null) => {
   // Convert any booleans to 'true' or 'false' strings
   let pfData = Object.entries(data).reduce((acc, [key, value]) => {
@@ -377,20 +398,6 @@ const generatePayFastApiSignature = (data, passPhrase = null) => {
   return crypto.createHash("md5").update(pfParamString).digest("hex").toLowerCase();
 };
 
-// Function to get ISO 8601 timestamp in 'YYYY-MM-DDTHH:MM:SS' format
-const getIso8601Timestamp = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  const seconds = String(now.getSeconds()).padStart(2, '0');
-  
-  // Return timestamp in the format 'YYYY-MM-DDTHH:MM:SS'
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
-};
-
 // Route to handle subscription cancellation
 app.post('/cancel-subscription', async (req, res) => {
   const { token } = req.body;
@@ -410,7 +417,9 @@ app.post('/cancel-subscription', async (req, res) => {
     const signature = generatePayFastApiSignature(data, PAYFAST_PASS_PHRASE);
 
     const headers = {
-      ...data,
+      'merchant-id': PAYFAST_MERCHANT_ID,
+      version: PAYFAST_API_VERSION,
+      timestamp: timestamp,
       signature: signature,
     };
 
