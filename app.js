@@ -12,6 +12,7 @@ const STRAPI_URL = process.env.STRAPI_URL;
 const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 const PAYFAST_MERCHANT_ID = process.env.PAYFAST_MERCHANT_ID;
 const PAYFAST_PASS_PHRASE = process.env.PAYFAST_PASS_PHRASE;
+const PAYFAST_API_URL = process.env.PAYFAST_API_URL;
 const PAYFAST_API_VERSION = 'v1';
 
 const upload = multer({ storage: multer.memoryStorage() });
