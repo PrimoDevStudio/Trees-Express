@@ -367,15 +367,33 @@ app.post('/process-itn', upload.none(), async (req, res) => {
 });
 
 // New route to handle subscription cancellation
-const generateSignatureForCancelSubscription = (params, passphrase) => {
-  const keys = Object.keys(params).sort();
-  let paramString = keys.map(key => `${key}=${encodeURIComponent(params[key])}`).join('&');
-  
-  if (passphrase !== null && passphrase !== '') {
-    paramString += `&passphrase=${encodeURIComponent(passphrase)}`;
+const generatePayFastApiSignature = (data, passPhrase = null) => {
+  // Convert any booleans to 'true' or 'false' strings
+  let pfData = Object.entries(data).reduce((acc, [key, value]) => {
+    acc[key] = typeof value === 'boolean' ? value.toString() : value;
+    return acc;
+  }, {});
+
+  // Remove signature if it exists
+  delete pfData.signature;
+
+  // Sort keys alphabetically
+  pfData = Object.keys(pfData)
+    .sort()
+    .reduce((acc, key) => ({ ...acc, [key]: pfData[key] }), {});
+
+  // Create parameter string
+  let pfParamString = Object.entries(pfData)
+    .map(([key, value]) => `${key}=${encodeURIComponent(value.trim()).replace(/%20/g, "+").replace(/[!'()]/g, escape).replace(/\*/g, "%2A")}`)
+    .join("&");
+
+  // Add passPhrase if it exists
+  if (passPhrase !== null && passPhrase.trim() !== '') {
+    pfParamString += `&passphrase=${encodeURIComponent(passPhrase.trim()).replace(/%20/g, "+")}`;
   }
 
-  return crypto.createHash('md5').update(paramString).digest('hex');
+  // Generate signature and convert to lowercase
+  return crypto.createHash("md5").update(pfParamString).digest("hex").toLowerCase();
 };
 
 app.post('/cancel-subscription', async (req, res) => {
@@ -386,25 +404,23 @@ app.post('/cancel-subscription', async (req, res) => {
   }
 
   try {
-    const timestamp = getIso8601Timestamp();
-    console.log('Generated timestamp:', timestamp);
-
-    const params = {
-      'merchant-id': PAYFAST_MERCHANT_ID,
-      version: PAYFAST_API_VERSION,
+    const timestamp = new Date().toISOString();
+    const data = {
+      'merchant-id': process.env.PAYFAST_MERCHANT_ID,
+      version: 'v1',
       timestamp: timestamp,
     };
 
-    const signature = generateSignatureForCancelSubscription(params, PAYFAST_PASS_PHRASE);
+    const signature = generatePayFastApiSignature(data, process.env.PAYFAST_PASS_PHRASE);
     
     const headers = {
-      ...params,
-      signature: signature,
+      ...data,
+      signature: signature, // This will now be lowercase
     };
 
-    console.log('Headers:', headers);
+    console.log('Request Headers:', headers);
 
-    const url = `${PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
+    const url = `${process.env.PAYFAST_API_URL}/subscriptions/${token}/cancel?testing=true`;
     console.log('Request URL:', url);
 
     const response = await axios.put(url, {}, { headers });
