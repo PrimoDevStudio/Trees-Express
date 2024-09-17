@@ -346,7 +346,7 @@ app.post('/process-itn', upload.none(), async (req, res) => {
     res.status(500).send('Internal Server Error');
   }
 });
-
+/*
 // Function to generate the current ISO-8601 timestamp in the required format
 const getIso8601Timestamp = () => {
   const now = new Date();
@@ -438,7 +438,7 @@ app.post('/cancel-subscription', async (req, res) => {
     res.status(500).json({ message: 'Error canceling subscription', error: error.response?.data || error.message });
   }
 });
-
+*/
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
